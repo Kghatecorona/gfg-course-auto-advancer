@@ -45,24 +45,7 @@
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  // Silent audio keep-alive (keeps Chrome media pipeline active in background)
-  function initAudioKeepAlive() {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      gain.gain.value = 0.00001; // Inaudible silent carrier
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      console.log('[GFG Auto] Background audio keep-alive enabled.');
-    } catch (e) {}
-  }
-  // Initialize keep-alive on first interaction or right away
-  initAudioKeepAlive();
-  window.addEventListener('click', initAudioKeepAlive, { once: true });
+
 
   // ---------------------------------------------------------
   // 2. FLOATING HUD UI
