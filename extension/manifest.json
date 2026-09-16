@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer (2x Speed + Auto Next)",
-  "version": "1.0",
-  "description": "Automatically plays GeeksforGeeks course videos at 2x speed, autoplays, and advances to the next video.",
+  "version": "2.0",
+  "description": "Plays GeeksforGeeks course videos at 2x speed and autoplays next videos with background tab / multi-desktop keep-alive.",
   "permissions": [
     "activeTab"
   ],
