@@ -1,6 +1,6 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.2_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.3_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
@@ -9,12 +9,12 @@ A lightweight browser automation tool for **GeeksforGeeks Batch Course** video t
 
 ---
 
-## ✨ What's New in v3.2
+## ✨ What's New in v3.3
 
-- 🏠 **Course Track Scope (Zero False Triggers on Home Page):** Fixed false quiz triggers on the batch home / overview page. The extension now enters a peaceful `Standby` mode when on course overview pages and only activates when you open a course track.
-- 🟢 **Precision Dark-Green Checkmark Detection:** Uses mathematical RGB color analysis (`g > r + 15 && g > b + 15`) to detect GFG's brand dark-green (`#2f8d46` / `rgb(47, 141, 70)`) checkmark badges with 100% accuracy.
-- ⏭️ **Row-Isolated Playlist Traversal:** Accurately isolates each individual video row in the sidebar, preventing false matches and immediately skipping already credited videos.
-- 👁️ **Full Background Focus & Progress Sync:** Overrides `document.hasFocus()`, `IntersectionObserver`, and Page Visibility so watch progress counts continuously across Windows virtual desktops.
+- 🛑 **Deadlock-Free End-Frame Auto-Advance:** Completely resolved the hang at the end frame (e.g. `[8:57 / 8:57]`). When a video reaches the end frame for 2 consecutive seconds, it records credit and advances immediately without requiring active play time that cannot accumulate on paused end frames.
+- 🎯 **Direct Unwatched Video Jump:** Scans the sidebar specifically for uncompleted videos (like *Sieve of Eratosthenes*) and jumps directly to them, effortlessly bypassing streaks of already completed videos.
+- 🟢 **Solid Dark-Green vs Hollow Circle Discrimination:** Distinguishes GFG's solid dark-green `#2f8d46` (RGB 47, 141, 70) checkmarks from faint/hollow uncompleted circles with 100% accuracy.
+- 🏠 **Batch Home Scope:** Remains peacefully in `Standby` on overview/curriculum pages, activating only within active course tracks.
 - ⏩ **Manual Skip Control:** On-demand `⏩ Skip` button in the floating HUD.
 
 ---
