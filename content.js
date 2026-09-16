@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GFG Course Auto-Advancer (2x Speed + Auto Next)
+// @name         GFG Course Auto-Advancer (Background Tab / Multi-Desktop Compatible)
 // @namespace    https://geeksforgeeks.org/
-// @version      1.0
-// @description  Automates GeeksforGeeks batch courses: plays at 2x, autoplays, mutes for background playback, waits for progress credit, and automatically clicks Next.
+// @version      2.0
+// @description  Automates GFG batch course videos with 2x speed, background tab keep-alive, unthrottled Web Worker timers, and auto-next across Windows virtual desktops.
 // @author       Kavyansh
 // @match        https://*.geeksforgeeks.org/batch/*
 // @match        https://geeksforgeeks.org/batch/*
@@ -13,7 +13,6 @@
 (function () {
   'use strict';
 
-  // Prevent duplicate execution if pasted multiple times
   if (window.__gfg_auto_advancer_active) {
     console.log('[GFG Auto] Script already active!');
     return;
@@ -25,27 +24,49 @@
   let isPaused = false;
   let completedCount = 0;
   let waitingForCredit = false;
-  let countdownSec = 0;
+  let creditDeadline = 0;
   let lastAdvanceTime = 0;
   let currentUrl = location.href;
+  let attachedVideo = null;
 
-  // Request Screen Wake Lock so computer doesn't sleep
+  // ---------------------------------------------------------
+  // 1. SCREEN WAKE LOCK & BACKGROUND AUDIO KEEP-ALIVE
+  // Prevents Chrome and Windows from sleeping/suspending the tab
+  // ---------------------------------------------------------
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) {
         await navigator.wakeLock.request('screen');
-        console.log('[GFG Auto] Screen Wake Lock active (prevents PC sleep).');
       }
-    } catch (e) {
-      console.log('[GFG Auto] WakeLock notice:', e.message);
-    }
+    } catch (e) {}
   }
   requestWakeLock();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  // Inject Floating HUD UI
+  // Silent audio keep-alive (keeps Chrome media pipeline active in background)
+  function initAudioKeepAlive() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.00001; // Inaudible silent carrier
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      console.log('[GFG Auto] Background audio keep-alive enabled.');
+    } catch (e) {}
+  }
+  // Initialize keep-alive on first interaction or right away
+  initAudioKeepAlive();
+  window.addEventListener('click', initAudioKeepAlive, { once: true });
+
+  // ---------------------------------------------------------
+  // 2. FLOATING HUD UI
+  // ---------------------------------------------------------
   const hud = document.createElement('div');
   hud.id = 'gfg-auto-hud';
   hud.style.cssText = `
@@ -61,7 +82,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 13px;
     line-height: 1.4;
-    min-width: 270px;
+    min-width: 275px;
     border: 1px solid #38bdf8;
     backdrop-filter: blur(8px);
     transition: all 0.2s ease;
@@ -71,7 +92,7 @@
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 6px;">
       <span style="font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
         <span id="gfg-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;"></span>
-        GFG Auto-Advancer
+        GFG Auto-Advancer v2
       </span>
       <span id="gfg-badge-count" style="background: #1e293b; color: #38bdf8; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 600;">
         Done: 0
@@ -79,7 +100,7 @@
     </div>
     
     <div id="gfg-status-msg" style="color: #cbd5e1; margin-bottom: 10px; font-size: 12px; min-height: 28px;">
-      Initializing video controller...
+      Initializing background controller...
     </div>
     
     <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between;">
@@ -99,11 +120,8 @@
   const btnVol = document.getElementById('gfg-btn-vol');
   const btnState = document.getElementById('gfg-btn-state');
 
-  // Controls Event Listeners
   btnSpd.addEventListener('click', () => {
-    if (targetSpeed === 2.0) targetSpeed = 1.5;
-    else if (targetSpeed === 1.5) targetSpeed = 1.0;
-    else targetSpeed = 2.0;
+    targetSpeed = targetSpeed === 2.0 ? 1.5 : (targetSpeed === 1.5 ? 1.0 : 2.0);
     btnSpd.innerText = targetSpeed.toFixed(1) + 'x';
     const video = document.querySelector('video');
     if (video) video.playbackRate = targetSpeed;
@@ -138,94 +156,129 @@
     }
   }
 
-  // Multi-Strategy Target Finder for Next Video / Track
+  // ---------------------------------------------------------
+  // 3. TARGET FINDER FOR NEXT VIDEO / TRACK
+  // ---------------------------------------------------------
   function findNextTarget() {
     const candidates = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
 
-    // Strategy 1: Top-Right "Next »", "Next >>", "Next" (not Prev)
+    // Priority 1: Top-Right "Next »", "Next >>", "Next"
     const exactNext = candidates.find(el => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
       return (text === 'next' || text === 'next >>' || text === 'next »' || text === 'next >' || text === 'next ›');
     });
-    if (exactNext) {
-      console.log('[GFG Auto] Found Next button (Strategy 1):', exactNext);
-      return exactNext;
-    }
+    if (exactNext) return exactNext;
 
-    // Strategy 2: "Next Track" button (at bottom left or top right)
+    // Priority 2: "Next Track" button
     const nextTrack = candidates.find(el => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
       return text.includes('next') && text.includes('track') && !text.includes('prev');
     });
-    if (nextTrack) {
-      console.log('[GFG Auto] Found Next Track button (Strategy 2):', nextTrack);
-      return nextTrack;
-    }
+    if (nextTrack) return nextTrack;
 
-    // Strategy 3: Any button/link starting with "next" (excluding prev)
-    const genericNext = candidates.find(el => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.startsWith('next') && !text.includes('prev');
-    });
-    if (genericNext) {
-      console.log('[GFG Auto] Found generic Next element (Strategy 3):', genericNext);
-      return genericNext;
-    }
-
-    // Strategy 4: Next video item in the left sidebar list
+    // Priority 3: Next video item in the left sidebar list
     const videoLinks = Array.from(document.querySelectorAll('a[href*="/video/"]'));
     if (videoLinks.length > 0) {
       const currIdx = videoLinks.findIndex(a => a.href === location.href || location.href.includes(a.getAttribute('href') || ''));
       if (currIdx !== -1 && currIdx + 1 < videoLinks.length) {
-        console.log('[GFG Auto] Found next video link in sidebar (Strategy 4):', videoLinks[currIdx + 1]);
         return videoLinks[currIdx + 1];
       }
     }
 
+    // Priority 4: Any element starting with 'next' (not prev)
+    const genericNext = candidates.find(el => {
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return text.startsWith('next') && !text.includes('prev');
+    });
+    if (genericNext) return genericNext;
+
     return null;
   }
 
-  // Trigger Advance to Next Video / Track
+  // ---------------------------------------------------------
+  // 4. FORCED NAVIGATION (WORKS IN BACKGROUND TABS & VIRTUAL DESKTOPS)
+  // ---------------------------------------------------------
   function advanceToNext() {
-    // Cooldown check (prevent accidental double clicks within 6 seconds)
     const now = Date.now();
-    if (now - lastAdvanceTime < 6000) {
-      return;
-    }
+    if (now - lastAdvanceTime < 4000) return;
     lastAdvanceTime = now;
 
     setStatus('Advancing to next video...', '#38bdf8');
     const target = findNextTarget();
 
     if (target) {
-      target.click();
+      console.log('[GFG Auto] Advancing to target:', target);
+      
+      // Dispatch complete synthetic mouse event chain
+      ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
+        try {
+          target.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
+        } catch (e) {}
+      });
+      try { target.click(); } catch (e) {}
+
+      // If the element has an href (or child link), extract destination URL
+      const destUrl = target.href || target.getAttribute('href') || target.querySelector('a')?.href;
+      if (destUrl && !destUrl.startsWith('javascript:')) {
+        const recordedUrl = location.href;
+        // If React SPA navigation is deferred because tab is in background, force location change!
+        setTimeout(() => {
+          if (location.href === recordedUrl) {
+            console.log('[GFG Auto] Background fallback navigation to:', destUrl);
+            window.location.href = destUrl;
+          }
+        }, 1200);
+      }
+
       completedCount++;
       if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
-      setStatus('Clicked Next! Loading upcoming video...', '#22c55e');
+      setStatus('Advancing... Loading new video.', '#22c55e');
       waitingForCredit = false;
-      countdownSec = 0;
     } else {
-      setStatus('Could not locate Next button. Check playlist!', '#f59e0b');
-      console.warn('[GFG Auto] No Next button or link found on page.');
+      setStatus('Could not locate Next button. Checking...', '#f59e0b');
     }
   }
 
-  // Main Loop (runs every 1 second)
-  setInterval(() => {
+  // ---------------------------------------------------------
+  // 5. NATIVE VIDEO EVENT HOOKS
+  // Direct listeners fire even when timers are throttled!
+  // ---------------------------------------------------------
+  function hookVideoEvents(video) {
+    if (attachedVideo === video) return;
+    attachedVideo = video;
+
+    console.log('[GFG Auto] Hooked native events to new video element.');
+
+    video.addEventListener('ended', () => {
+      console.log('[GFG Auto] Native "ended" event received.');
+      if (!waitingForCredit) {
+        waitingForCredit = true;
+        creditDeadline = Date.now() + 3500; // 3.5s wait for GFG completion heartbeat
+        setStatus('Video ended! Recording credit (3s)...', '#f59e0b');
+      }
+    });
+
+    video.addEventListener('pause', () => {
+      if (!isPaused && !video.ended && video.currentTime < (video.duration - 1)) {
+        video.muted = true;
+        isMuted = true;
+        video.play().catch(() => {});
+      }
+    });
+  }
+
+  // ---------------------------------------------------------
+  // 6. MAIN CONTROLLER TICK
+  // ---------------------------------------------------------
+  function handleTick() {
     if (isPaused) return;
 
-    // Detect SPA page/URL change
+    // Detect URL changes (SPA navigation across videos)
     if (location.href !== currentUrl) {
       currentUrl = location.href;
       waitingForCredit = false;
-      countdownSec = 0;
-      setStatus('New video detected! Initializing...', '#38bdf8');
+      attachedVideo = null;
+      setStatus('New video loaded! Initializing...', '#38bdf8');
     }
 
     const video = document.querySelector('video');
@@ -234,52 +287,52 @@
       return;
     }
 
-    // Countdown while waiting for GFG server to record completion progress
+    hookVideoEvents(video);
+
+    // If waiting for credit, check against absolute timestamp (immune to timer drift)
     if (waitingForCredit) {
-      countdownSec--;
-      setStatus(`Video finished! Waiting ${countdownSec}s for server credit...`, '#f59e0b');
-      if (countdownSec <= 0) {
+      const remainingMs = creditDeadline - Date.now();
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+      setStatus(`Video finished! Credit countdown: ${remainingSec}s`, '#f59e0b');
+
+      if (remainingMs <= 0) {
         waitingForCredit = false;
         advanceToNext();
       }
       return;
     }
 
-    // Enforce mute state (enables reliable background autoplay)
+    // Keep muted to guarantee Chrome allows background autoplay
     if (video.muted !== isMuted) {
       video.muted = isMuted;
     }
 
-    // Enforce 2x playback speed
+    // Maintain 2.0x playback rate
     if (video.playbackRate !== targetSpeed) {
       video.playbackRate = targetSpeed;
     }
 
     // Autoplay if paused
     if (video.paused && !video.ended) {
-      video.play().then(() => {
-        setStatus(`Playing at ${targetSpeed}x`, '#22c55e');
-      }).catch(() => {
-        // Fallback: mute to satisfy browser autoplay policy
+      video.play().catch(() => {
         video.muted = true;
         isMuted = true;
         if (btnVol) btnVol.innerText = '🔇 Muted';
         video.play().catch(() => {});
-        setStatus('Autoplay blocked. Click page once!', '#f59e0b');
       });
       return;
     }
 
-    // Detect Video Completion (ended or within 0.75s of duration)
-    const isEnded = video.ended || (video.duration > 0 && video.currentTime >= video.duration - 0.75);
-    if (isEnded) {
+    // Video completion check (fallback if native ended event didn't trigger)
+    const isAlmostEnded = video.ended || (video.duration > 0 && video.currentTime >= video.duration - 0.75);
+    if (isAlmostEnded && !waitingForCredit) {
       waitingForCredit = true;
-      countdownSec = 5; // 5-second grace period for GFG progress heartbeat
-      setStatus('Video ended! Waiting 5s for GFG server credit...', '#f59e0b');
+      creditDeadline = Date.now() + 3500;
+      setStatus('Video ended! Recording credit (3s)...', '#f59e0b');
       return;
     }
 
-    // Display Real-Time Playback Progress in HUD
+    // Display real-time playback progress in HUD
     if (!video.paused && video.duration > 0) {
       const curM = Math.floor(video.currentTime / 60);
       const curS = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
@@ -290,7 +343,33 @@
       const remS = (remSec % 60).toString().padStart(2, '0');
       setStatus(`Playing (${targetSpeed}x) • [${curM}:${curS} / ${durM}:${durS}] • ETA: ~${remM}m ${remS}s`, '#22c55e');
     }
-  }, 1000);
+  }
 
-  console.log('%c[GFG Auto-Advancer] Active! Playing at 2x and auto-advancing.', 'color: #22c55e; font-size: 14px; font-weight: bold;');
+  // ---------------------------------------------------------
+  // 7. UNTHROTTLED WEB WORKER TIMER
+  // Chrome throttles setInterval in background tabs to 1 min,
+  // but Web Workers are NEVER throttled!
+  // ---------------------------------------------------------
+  try {
+    const workerScript = `
+      setInterval(function() {
+        postMessage('tick');
+      }, 1000);
+    `;
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    worker.onmessage = function () {
+      handleTick();
+    };
+    console.log('[GFG Auto] Unthrottled Web Worker heartbeat active.');
+  } catch (err) {
+    // Fallback standard interval if workers are restricted
+    console.warn('[GFG Auto] Worker creation fallback to window setInterval:', err);
+    setInterval(handleTick, 1000);
+  }
+
+  // Standard interval backup
+  setInterval(handleTick, 1000);
+
+  console.log('%c[GFG Auto-Advancer v2] Background & Multi-Desktop Engine Ready!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
 })();
