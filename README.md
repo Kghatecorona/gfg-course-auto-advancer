@@ -1,6 +1,6 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.3_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.4_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
@@ -9,13 +9,14 @@ A lightweight browser automation tool for **GeeksforGeeks Batch Course** video t
 
 ---
 
-## ✨ What's New in v3.3
+## ✨ What's New in v3.4
 
-- 🛑 **Deadlock-Free End-Frame Auto-Advance:** Completely resolved the hang at the end frame (e.g. `[8:57 / 8:57]`). When a video reaches the end frame for 2 consecutive seconds, it records credit and advances immediately without requiring active play time that cannot accumulate on paused end frames.
-- 🎯 **Direct Unwatched Video Jump:** Scans the sidebar specifically for uncompleted videos (like *Sieve of Eratosthenes*) and jumps directly to them, effortlessly bypassing streaks of already completed videos.
-- 🟢 **Solid Dark-Green vs Hollow Circle Discrimination:** Distinguishes GFG's solid dark-green `#2f8d46` (RGB 47, 141, 70) checkmarks from faint/hollow uncompleted circles with 100% accuracy.
-- 🏠 **Batch Home Scope:** Remains peacefully in `Standby` on overview/curriculum pages, activating only within active course tracks.
-- ⏩ **Manual Skip Control:** On-demand `⏩ Skip` button in the floating HUD.
+- 🔄 **Fixed Infinite Page Reload Loop:** Resolved the issue where fallback navigation triggered `window.location.href = location.href`, causing the page to reload every 3 seconds. Fallbacks now strictly require `destUrl !== location.href`.
+- ⏩ **Native GFG `Next »` Button Integration:** Directly triggers GeeksforGeeks' official `Next »` button above the video player, ensuring smooth SPA transitions through the track to reach unwatched videos like *Sieve of Eratosthenes*.
+- ⏱️ **0:00 False End-Frame Elimination:** Added strict `currentTime > 5s` guard to prevent newly loaded videos at 0:00 from falsely triggering completion logic.
+- 🟢 **Solid Dark-Green Checkmark Skip:** Automatically clicks `Next »` through previously watched videos until an uncompleted video is reached.
+- 🏠 **Batch Home Scope:** Remains in `Standby` on overview pages.
+- ⏩ **Manual Skip Control:** Instant `⏩ Skip` button in the floating HUD.
 
 ---
 

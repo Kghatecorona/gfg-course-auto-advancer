@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GFG Course Auto-Advancer (v3.3 - Anti-Stall, Sieve Unwatched Jump & Precision Checkmarks)
+// @name         GFG Course Auto-Advancer (v3.4 - Infinite Loop Fix & Native Next Button Integration)
 // @namespace    https://geeksforgeeks.org/
-// @version      3.3
-// @description  Automates GFG courses at 2x. Fixes video end-frame stall, directly jumps to unwatched videos (like Sieve of Eratosthenes), detects solid dark-green checkmarks, and auto-advances.
+// @version      3.4
+// @description  Automates GFG courses at 2x. Fixes page reload infinite loop, clicks native Next button, auto-skips completed videos, and tracks background progress.
 // @author       Kavyansh
 // @match        https://*.geeksforgeeks.org/batch/*
 // @match        https://geeksforgeeks.org/batch/*
@@ -13,11 +13,11 @@
 (function () {
   'use strict';
 
-  if (window.__gfg_auto_advancer_v33_active) {
-    console.log('[GFG Auto v3.3] Script already active!');
+  if (window.__gfg_auto_advancer_v34_active) {
+    console.log('[GFG Auto v3.4] Script already active!');
     return;
   }
-  window.__gfg_auto_advancer_v33_active = true;
+  window.__gfg_auto_advancer_v34_active = true;
 
   // ----------------------------------------------------------------------
   // 1. BACKGROUND TRACKING SPOOFS (hasFocus, Visibility, rAF, IntersectionObserver)
@@ -67,8 +67,8 @@
     // 1.5 Spoof IntersectionObserver so GFG player always thinks video is visible in viewport
     try {
       const OrigIO = window.IntersectionObserver;
-      if (OrigIO && !window.__gfg_io_v33_patched) {
-        window.__gfg_io_v33_patched = true;
+      if (OrigIO && !window.__gfg_io_v34_patched) {
+        window.__gfg_io_v34_patched = true;
         window.IntersectionObserver = function (callback, options) {
           const wrappedCallback = (entries, observer) => {
             const spoofed = entries.map(entry => {
@@ -143,21 +143,16 @@
     if (!colorStr || typeof colorStr !== 'string') return false;
     const s = colorStr.toLowerCase().trim();
 
-    // Exact GFG brand green hex
     if (s === '#2f8d46' || s === '#318e48' || s === '#308e47' || s === '#308d47') return true;
 
-    // Parse rgb(r, g, b) or rgba(r, g, b, a)
     const rgbMatch = s.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
     if (rgbMatch) {
       const r = parseInt(rgbMatch[1], 10);
       const g = parseInt(rgbMatch[2], 10);
       const b = parseInt(rgbMatch[3], 10);
-      // GFG brand solid dark green has low red (< 85), strong green (>= 115), low blue (< 105)
-      // and prominent green saturation: (g - r) >= 40 and (g - b) >= 40
       return r < 85 && g >= 115 && b < 105 && (g - r) >= 40 && (g - b) >= 40;
     }
 
-    // Parse hex #rrggbb
     const hexMatch = s.match(/#([0-9a-f]{6})/i);
     if (hexMatch) {
       const hex = hexMatch[1];
@@ -170,18 +165,14 @@
     return false;
   }
 
-  // Check if a sidebar item element has the solid dark-green checkmark
   function isElementTicked(el) {
     if (!el) return false;
 
-    // Check classes
     const cls = (el.className?.baseVal || el.className || '').toString().toLowerCase();
     if (cls.includes('completed') || cls.includes('watched') || cls.includes('done')) return true;
 
-    // Check SVG / icon elements in this container
     const candidates = [el, ...Array.from(el.querySelectorAll('svg, path, circle, i, span, div'))];
     for (const c of candidates) {
-      // Check small badge elements (circle around 10px - 36px)
       try {
         const rect = c.getBoundingClientRect();
         if (rect.width >= 8 && rect.width <= 36 && rect.height >= 8 && rect.height <= 36) {
@@ -195,12 +186,10 @@
         }
       } catch (e) {}
 
-      // Direct attributes
       const fill = c.getAttribute?.('fill') || '';
       const stroke = c.getAttribute?.('stroke') || '';
       if (isSolidDarkGreen(fill) || isSolidDarkGreen(stroke)) return true;
 
-      // Completed aria-labels or data-attributes
       const aria = (c.getAttribute?.('aria-label') || '').toLowerCase();
       const title = (c.getAttribute?.('title') || '').toLowerCase();
       if (aria.includes('complete') || aria.includes('watched') || title.includes('complete') || title.includes('watched')) {
@@ -211,95 +200,86 @@
     return false;
   }
 
-  // ----------------------------------------------------------------------
-  // 3. UNWATCHED SIDEBAR ITEM DETECTOR
-  // Finds items in the sidebar that lack the solid dark-green checkmark
-  // ----------------------------------------------------------------------
-  function findUnwatchedSidebarItem() {
-    // Collect all candidate elements on the left side (sidebar area, left < 360)
-    const all = Array.from(document.querySelectorAll('*'));
-    
-    // Find rows containing "Duration:" text (each video item has Duration text)
-    const durationNodes = all.filter(el => {
+  // Check if current video in sidebar has the solid green checkmark
+  function isCurrentVideoCompletedInSidebar() {
+    const mainTitle = (document.querySelector('h1, h2, div[class*="video-title"]') || {}).textContent || '';
+    const cleanTitle = mainTitle.trim().toLowerCase();
+
+    const allElements = Array.from(document.querySelectorAll('*'));
+    const sidebarRows = allElements.filter(el => {
       const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0 || r.left > 360) return false;
-      const txt = (el.innerText || el.textContent || '').trim();
+      if (r.width === 0 || r.left > 360) return false;
+      const txt = (el.innerText || '').trim();
       return txt.startsWith('Duration:');
     });
 
-    if (durationNodes.length > 0) {
-      for (const dNode of durationNodes) {
-        // Walk up to find this video's clickable row container
-        let row = dNode;
-        while (row && row.parentElement && row.parentElement !== document.body) {
-          const parent = row.parentElement;
-          const durationsInParent = Array.from(parent.querySelectorAll('*')).filter(e => (e.innerText || '').trim().startsWith('Duration:'));
-          if (durationsInParent.length > 1) {
-            break; // row is the individual item container!
-          }
-          row = parent;
-        }
-
-        // Is this row ticked?
-        if (row && !isElementTicked(row)) {
-          // Found an unwatched video item (like Sieve of Eratosthenes)!
-          console.log('[GFG Auto v3.3] Found unwatched video row in sidebar:', row);
-          return row;
-        }
-      }
-    }
-
-    // Fallback: check <a> links in sidebar
-    const sidebarLinks = Array.from(document.querySelectorAll('a[href*="/video/"], a[href*="/track/"]')).filter(a => {
-      const r = a.getBoundingClientRect();
-      return r.width > 0 && r.left < 360 && a.href !== location.href;
-    });
-
-    for (const a of sidebarLinks) {
-      if (!isElementTicked(a)) {
-        console.log('[GFG Auto v3.3] Found unwatched sidebar link:', a);
-        return a;
-      }
-    }
-
-    return null;
-  }
-
-  // Check if current video page is already watched
-  function isCurrentPageWatched() {
-    // Check if the current video title in the sidebar has a green tick
-    const pageTitle = (document.querySelector('h1, h2, div[class*="video-title"], div[class*="header"]') || {}).textContent || '';
-    const cleanTitle = pageTitle.trim().toLowerCase();
-
-    // Check all duration elements in sidebar
-    const all = Array.from(document.querySelectorAll('*'));
-    const durationNodes = all.filter(el => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.left < 360 && (el.innerText || '').trim().startsWith('Duration:');
-    });
-
-    for (const dNode of durationNodes) {
+    for (const dNode of sidebarRows) {
       let row = dNode;
       while (row && row.parentElement && row.parentElement !== document.body) {
         const parent = row.parentElement;
-        const durationsInParent = Array.from(parent.querySelectorAll('*')).filter(e => (e.innerText || '').trim().startsWith('Duration:'));
-        if (durationsInParent.length > 1) break;
+        const count = Array.from(parent.querySelectorAll('*')).filter(e => (e.innerText || '').trim().startsWith('Duration:')).length;
+        if (count > 1) break;
         row = parent;
       }
 
       if (row) {
         const rowText = (row.innerText || '').toLowerCase();
-        // If this row matches current video title or active highlight
-        const isSelected = row.className?.includes?.('active') || 
-                           row.className?.includes?.('selected') || 
-                           (cleanTitle.length > 3 && rowText.includes(cleanTitle));
-        if (isSelected && isElementTicked(row)) {
+        const isCurrent = (cleanTitle.length > 3 && rowText.includes(cleanTitle)) ||
+                          row.className?.includes?.('active') ||
+                          row.className?.includes?.('selected');
+        if (isCurrent && isElementTicked(row)) {
           return true;
         }
       }
     }
 
     return false;
+  }
+
+  // ----------------------------------------------------------------------
+  // 3. NATIVE GFG BUTTON FINDER (TOP-RIGHT NEXT » BUTTON)
+  // ----------------------------------------------------------------------
+  function findGFGNextButton() {
+    const all = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
+
+    // 1. Top-right exact "Next »" button above video player
+    const topNext = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      const isNext = (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >' || text === 'next ›');
+      return isNext && r.top < 200 && r.left > 400;
+    });
+    if (topNext) return topNext;
+
+    // 2. Any exact "Next »" button on page
+    const exactNext = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >' || text === 'next ›');
+    });
+    if (exactNext) return exactNext;
+
+    // 3. "Next Track" button (advances to next course track when all videos in track are done)
+    const nextTrack = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return text.includes('next') && text.includes('track') && !text.includes('prev');
+    });
+    if (nextTrack) return nextTrack;
+
+    // 4. Any generic button starting with "next"
+    const genericNext = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return text.startsWith('next') && !text.includes('prev');
+    });
+    if (genericNext) return genericNext;
+
+    return null;
   }
 
   // ----------------------------------------------------------------------
@@ -357,7 +337,7 @@
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 6px;">
         <span style="font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
           <span id="gfg-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;"></span>
-          GFG Auto-Advancer v3.3
+          GFG Auto-Advancer v3.4
         </span>
         <span id="gfg-badge-count" style="background: #1e293b; color: #38bdf8; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 600;">
           Done: 0
@@ -430,53 +410,12 @@
   }
 
   // ----------------------------------------------------------------------
-  // 5. NAVIGATION ENGINE (FINDS UNWATCHED VIDEO OR ADVANCES VIA NEXT BUTTON)
+  // 5. NAVIGATION ENGINE (CLICKS NATIVE NEXT BUTTON & PREVENTS PAGE RELOADS)
   // ----------------------------------------------------------------------
-  function findNextTarget() {
-    if (!location.pathname.includes('/track/')) return null;
-
-    // Strategy 1: Direct jump to the first UNWATCHED video in the sidebar (e.g. Sieve of Eratosthenes)
-    const unwatchedRow = findUnwatchedSidebarItem();
-    if (unwatchedRow) {
-      console.log('[GFG Auto v3.3] Priority Target: Unwatched video row found:', unwatchedRow);
-      return unwatchedRow;
-    }
-
-    // Strategy 2: Top-right "Next »" button (above video player)
-    const all = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
-    const exactNext = all.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return (text === 'next' || text === 'next >>' || text === 'next »' || text === 'next >' || text === 'next ›');
-    });
-    if (exactNext) return exactNext;
-
-    // Strategy 3: "Next Track" button (at bottom-left of sidebar or top)
-    const nextTrack = all.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.includes('next') && text.includes('track') && !text.includes('prev');
-    });
-    if (nextTrack) return nextTrack;
-
-    // Strategy 4: Any generic button starting with "next"
-    const genericNext = all.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.startsWith('next') && !text.includes('prev');
-    });
-    if (genericNext) return genericNext;
-
-    return null;
-  }
-
   function advanceToNext() {
     const now = Date.now();
     if (now < navigationCooldownUntil) return;
-    navigationCooldownUntil = now + 6000; // 6-second navigation cooldown
+    navigationCooldownUntil = now + 4000; // 4-second cooldown between advances
 
     isNavigating = true;
     activeVideoKey = '';
@@ -486,16 +425,16 @@
     endFrameTicks = 0;
 
     setStatus('Advancing to next video/track...', '#38bdf8');
-    const target = findNextTarget();
+    const target = findGFGNextButton();
 
     if (target) {
-      console.log('[GFG Auto v3.3] Advancing target:', target);
+      console.log('[GFG Auto v3.4] Advancing via Next button:', target);
 
-      // Check if target has an anchor tag
+      // Extract destination URL if it's an anchor
       const anchor = target.tagName === 'A' ? target : (target.querySelector('a') || target.closest('a'));
       const destUrl = anchor?.href;
 
-      // Dispatch full synthetic mouse click sequence
+      // Dispatch complete synthetic mouse sequence
       ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
         try {
           target.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
@@ -503,12 +442,13 @@
       });
       try { target.click(); } catch (e) {}
 
-      // Background navigation fallback if React defers click in background
-      if (destUrl && !destUrl.startsWith('javascript:')) {
+      // CRITICAL BUG FIX: NEVER navigate if destUrl is the CURRENT PAGE URL!
+      // This permanently stops the 3-second reload infinite loop.
+      if (destUrl && destUrl !== location.href && !destUrl.startsWith('javascript:')) {
         const startUrl = location.href;
         setTimeout(() => {
-          if (location.href === startUrl) {
-            console.log('[GFG Auto v3.3] Direct URL navigation fallback to:', destUrl);
+          if (location.href === startUrl && destUrl !== location.href) {
+            console.log('[GFG Auto v3.4] Direct URL navigation fallback to:', destUrl);
             window.location.href = destUrl;
           }
         }, 1500);
@@ -517,9 +457,9 @@
       completedCount++;
       const badgeCount = document.getElementById('gfg-badge-count');
       if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
-      setStatus('Advancing... Loading upcoming item.', '#22c55e');
+      setStatus('Clicked Next! Advancing...', '#22c55e');
     } else {
-      setStatus('No Next item found. Checking playlist...', '#f59e0b');
+      setStatus('Could not locate Next button. Check playlist!', '#f59e0b');
     }
   }
 
@@ -576,18 +516,17 @@
     }
 
     // -----------------------------------------------------------
-    // CASE A: CHECK IF CURRENT VIDEO IS ALREADY TICKED GREEN
-    // If current video was already credited, skip it immediately!
+    // CASE A: CHECK IF CURRENT VIDEO IS ALREADY CREDITED (SOLID GREEN TICK)
     // -----------------------------------------------------------
-    const currentVideoTicked = isCurrentPageWatched();
+    const currentVideoTicked = isCurrentVideoCompletedInSidebar();
     if (currentVideoTicked) {
       if (!isSkippingAlreadyWatched) {
         isSkippingAlreadyWatched = true;
         alreadyWatchedSkipDeadline = Date.now() + 2000;
-        setStatus('✅ Video already credited! Jumping to unwatched in 2s...', '#22c55e');
+        setStatus('✅ Video already credited! Clicking Next in 2s...', '#22c55e');
       } else {
         const remSec = Math.max(0, Math.ceil((alreadyWatchedSkipDeadline - Date.now()) / 1000));
-        setStatus(`✅ Video already credited! Jumping to unwatched in ${remSec}s...`, '#22c55e');
+        setStatus(`✅ Video already credited! Clicking Next in ${remSec}s...`, '#22c55e');
         if (Date.now() >= alreadyWatchedSkipDeadline) {
           isSkippingAlreadyWatched = false;
           advanceToNext();
@@ -642,11 +581,11 @@
         isNavigating = false;
         waitingForCredit = false;
         endFrameTicks = 0;
-        console.log('[GFG Auto v3.3] Video active. Duration:', video.duration);
+        console.log('[GFG Auto v3.4] Video active. Duration:', video.duration);
       }
     }
 
-    // Waiting for server credit countdown
+    // Waiting for credit countdown
     if (waitingForCredit) {
       const remainingMs = creditDeadline - Date.now();
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -666,12 +605,13 @@
     }
 
     // -----------------------------------------------------------
-    // CASE C: DEADLOCK-FREE END-FRAME DETECTION
-    // Completely eliminates the 8:57 / 8:57 hanging bug!
+    // CASE C: END-FRAME DETECTION (MUST BE > 5 SECONDS TO PREVENT 0:00 FALSE TRIGGERS)
     // -----------------------------------------------------------
-    const isAtEndFrame = video.ended || 
-      (video.duration > 5 && (video.duration - video.currentTime) <= 1.0) ||
-      (video.duration > 5 && video.currentTime >= video.duration - 0.5);
+    const isAtEndFrame = video.duration > 5 && video.currentTime > 5 && (
+      video.ended || 
+      (video.duration - video.currentTime) <= 1.0 || 
+      video.currentTime >= (video.duration - 0.5)
+    );
 
     if (isAtEndFrame) {
       endFrameTicks++;
@@ -736,13 +676,13 @@
     worker.onmessage = function () {
       handleTick();
     };
-    console.log('[GFG Auto v3.3] Web Worker background heartbeat active.');
+    console.log('[GFG Auto v3.4] Web Worker background heartbeat active.');
   } catch (err) {
-    console.warn('[GFG Auto v3.3] Worker fallback to setInterval:', err);
+    console.warn('[GFG Auto v3.4] Worker fallback to setInterval:', err);
     setInterval(handleTick, 1000);
   }
 
   setInterval(handleTick, 1000);
 
-  console.log('%c[GFG Auto-Advancer v3.3] Anti-Stall + Sieve Unwatched Jump Ready!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
+  console.log('%c[GFG Auto-Advancer v3.4] Infinite Loop Fix + Native Next Engine Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
 })();
