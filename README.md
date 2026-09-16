@@ -19,9 +19,17 @@ A lightweight browser automation tool for **GeeksforGeeks Batch Course** video t
 
 ---
 
-## 📥 Installation
+## ⚡ 1-Click Install (Fastest Method)
 
-You can run this project in **two ways**:
+If someone has **Tampermonkey** or **Violentmonkey** installed, they can install this in **1 single click**:
+
+[![Install Userscript](https://img.shields.io/badge/⚡_Install_Userscript-Click_Here-22c55e?style=for-the-badge&logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/Kghatecorona/gfg-course-auto-advancer/main/gfg_auto_advancer.user.js)
+
+*(Clicking the link above automatically triggers the Tampermonkey installer. Click "Install" and it's active immediately!)*
+
+---
+
+## 📥 Manual Installation Options
 
 ### Option 1: Chrome Extension (Recommended)
 1. Clone or download this repository:
