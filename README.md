@@ -26,7 +26,7 @@ You can run this project in **two ways**:
 ### Option 1: Chrome Extension (Recommended)
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/<your-username>/gfg-course-auto-advancer.git
+   git clone https://github.com/Kghatecorona/gfg-course-auto-advancer.git
    ```
 2. Open Google Chrome and navigate to `chrome://extensions/`.
 3. In the top-right corner, enable **Developer mode**.
