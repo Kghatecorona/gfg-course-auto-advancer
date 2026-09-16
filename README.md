@@ -5,18 +5,17 @@
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, automatically skips quizzes and already completed videos, and advances continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
+A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, skips already watched videos and quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
 
 ---
 
 ## ✨ What's New in v3.1
 
-- ⏩ **Auto-Skip Already Watched Videos (No More Freezing):** Fixed the bug where the extension would hang on already completed videos until the tab was focused. The engine now inspects sidebar completion checkmarks and video end states on load, automatically advancing past watched videos in 2 seconds.
-- 🎯 **Smart Unwatched Video Prioritization:** When advancing, the engine scans forward in the course playlist to locate the next **uncompleted** video, skipping past clusters of already finished lessons.
-- ⏱️ **Unthrottled Web Worker Fallback Navigation:** Navigation fallbacks are now coordinated through the background Web Worker, ensuring route changes occur without delay even on hidden Windows virtual desktops.
-- 🛡️ **Anti-Skip Protection:** Eliminates SPA element reuse race conditions with verified watch time checks and smart cooldowns.
-- 📝 **Auto-Skip Quizzes & Problems:** Detects non-video pages and jumps straight to the next video.
-- 🔄 **Real-Time Sidebar Progress Sync:** Keeps sidebar durations, progress bars, and checkmarks updating in the background.
+- ⏭️ **Auto-Skip Already Watched Videos (Anti-Hang):** Detects if a video is already marked completed (with GFG's green checkmark `✓`) and automatically skips it in 2s, completely resolving the hang on previously viewed videos.
+- 🎯 **Smart Unwatched-Only Progression:** Always scans forward in the course playlist for the next *unwatched* video link, jumping past completed items directly to videos needing credit.
+- 👁️ **Full Background Focus & Progress Tracking:** Spoofs `document.hasFocus() = true`, `IntersectionObserver`, and Page Visibility so GFG's backend heartbeat continues counting watch progress in real time across Windows virtual desktops.
+- 📝 **Auto-Skip Quizzes & Problems:** Automatically bypasses non-video pages to keep continuous video progression.
+- ⏩ **Manual Skip Control:** On-demand `⏩ Skip` button in the floating HUD.
 
 ---
 

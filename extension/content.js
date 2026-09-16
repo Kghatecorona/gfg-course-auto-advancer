@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GFG Course Auto-Advancer (v3.1 - Auto-Skip Watched Videos & Anti-Hang)
+// @name         GFG Course Auto-Advancer (v3.1 - Auto-Skip Completed, Anti-Hang & Full Background Progress Sync)
 // @namespace    https://geeksforgeeks.org/
 // @version      3.1
-// @description  Automates GFG course tracks at 2x speed. Automatically detects & skips already watched videos, bypasses quizzes, prevents skipping, and syncs progress in background tabs.
+// @description  Automates GFG course tracks at 2x speed. Skips already watched videos and quizzes, fixes background tab progress tracking via hasFocus/visibility spoofing, and auto-advances.
 // @author       Kavyansh
 // @match        https://*.geeksforgeeks.org/batch/*
 // @match        https://geeksforgeeks.org/batch/*
@@ -20,57 +20,98 @@
   window.__gfg_auto_advancer_v31_active = true;
 
   // ----------------------------------------------------------------------
-  // 1. BACKGROUND TAB UI SYNC: SPOOF VISIBILITY & UNTHROTTLE RAF
-  // Fixes GFG sidebar video length, progress bar, and checkmarks in background
+  // 1. BACKGROUND TRACKING SPOOFING (hasFocus, Visibility, rAF, IntersectionObserver)
+  // Forces GFG to count video progress & update the sidebar even in background tabs
   // ----------------------------------------------------------------------
-  function patchVisibility() {
+  function applyBackgroundSpoofs() {
+    // 1.1 document.hasFocus() always returns true (prevents GFG from pausing tracking)
+    try {
+      Document.prototype.hasFocus = function () { return true; };
+      document.hasFocus = function () { return true; };
+    } catch (e) {}
+
+    // 1.2 Page Visibility API: always visible
     try {
       Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
       Object.defineProperty(Document.prototype, 'visibilityState', { get: () => 'visible', configurable: true });
       Object.defineProperty(Document.prototype, 'webkitHidden', { get: () => false, configurable: true });
       Object.defineProperty(Document.prototype, 'webkitVisibilityState', { get: () => 'visible', configurable: true });
-    } catch (e) {}
-
-    try {
       Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
       Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
     } catch (e) {}
-  }
-  patchVisibility();
 
-  // Prevent GFG / React from pausing updates when window loses focus
-  window.addEventListener('visibilitychange', (e) => {
-    e.stopImmediatePropagation();
-  }, true);
-  document.addEventListener('visibilitychange', (e) => {
-    e.stopImmediatePropagation();
-  }, true);
+    // 1.3 Neutralize blur & focusout property handlers
+    try {
+      Object.defineProperty(window, 'onblur', { get: () => null, set: () => {}, configurable: true });
+      Object.defineProperty(document, 'onblur', { get: () => null, set: () => {}, configurable: true });
+    } catch (e) {}
 
-  // Stop blur event from pausing GFG internal tracking timers
-  window.addEventListener('blur', (e) => {
-    e.stopImmediatePropagation();
-  }, true);
-
-  // Unfreeze requestAnimationFrame in background tabs (forces React to flush DOM updates)
-  try {
-    const origRAF = window.requestAnimationFrame;
-    window.requestAnimationFrame = function (callback) {
-      let executed = false;
-      const id = origRAF((timestamp) => {
-        executed = true;
-        callback(timestamp);
-      });
-      // Fallback timer: if Chrome background tab suppresses rAF, execute callback anyway
-      setTimeout(() => {
-        if (!executed) {
-          callback(performance.now());
+    // 1.4 Intercept addEventListener to drop blur/focusout and filter visibilitychange
+    try {
+      const origAdd = EventTarget.prototype.addEventListener;
+      EventTarget.prototype.addEventListener = function (type, listener, options) {
+        if (type === 'blur' || type === 'focusout') {
+          return; // Ignore blur listeners that pause GFG tracking
         }
-      }, 40);
-      return id;
-    };
-  } catch (e) {}
+        if (type === 'visibilitychange') {
+          const wrapped = function (e) {
+            if (document.hidden) return;
+            return listener.apply(this, arguments);
+          };
+          return origAdd.call(this, type, wrapped, options);
+        }
+        return origAdd.call(this, type, listener, options);
+      };
+    } catch (e) {}
 
-  // Request Screen Wake Lock so Windows doesn't sleep
+    // 1.5 Spoof IntersectionObserver so GFG player always thinks video is visible in viewport
+    try {
+      const OrigIO = window.IntersectionObserver;
+      if (OrigIO && !window.__gfg_io_patched) {
+        window.__gfg_io_patched = true;
+        window.IntersectionObserver = function (callback, options) {
+          const wrappedCallback = (entries, observer) => {
+            const spoofed = entries.map(entry => {
+              if (!entry.isIntersecting) {
+                return new Proxy(entry, {
+                  get(target, prop) {
+                    if (prop === 'isIntersecting') return true;
+                    if (prop === 'intersectionRatio') return 1;
+                    return Reflect.get(target, prop);
+                  }
+                });
+              }
+              return entry;
+            });
+            return callback(spoofed, observer);
+          };
+          return new OrigIO(wrappedCallback, options);
+        };
+        window.IntersectionObserver.prototype = OrigIO.prototype;
+      }
+    } catch (e) {}
+
+    // 1.6 Unfreeze requestAnimationFrame in background tabs
+    try {
+      const origRAF = window.requestAnimationFrame;
+      window.requestAnimationFrame = function (callback) {
+        let executed = false;
+        const id = origRAF((timestamp) => {
+          executed = true;
+          callback(timestamp);
+        });
+        setTimeout(() => {
+          if (!executed) {
+            callback(performance.now());
+          }
+        }, 40);
+        return id;
+      };
+    } catch (e) {}
+  }
+  applyBackgroundSpoofs();
+
+  // Screen Wake Lock so computer doesn't sleep
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
@@ -81,26 +122,130 @@
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  // Periodically fire synthetic timeupdate & focus to ensure React re-renders sidebar
+  // Periodically pulse synthetic timeupdate & focus to ensure React updates sidebar
   setInterval(() => {
     try {
       const v = document.querySelector('video');
       if (v && !v.paused) {
-        v.dispatchEvent(new Event('timeupdate'));
+        v.dispatchEvent(new Event('timeupdate', { bubbles: true }));
+        v.dispatchEvent(new Event('progress', { bubbles: true }));
       }
       window.dispatchEvent(new Event('focus'));
     } catch (e) {}
-  }, 2500);
+  }, 2000);
 
   // ----------------------------------------------------------------------
-  // 2. STATE CONTROLLER (ANTI-SKIP, WATCHED-DETECTOR & QUIZ HANDLING)
+  // 2. HELPER FUNCTIONS (CHECKMARK & COMPLETION DETECTION)
+  // ----------------------------------------------------------------------
+  function isElementCompleted(el) {
+    if (!el) return false;
+
+    // 1. Explicit classes or attributes
+    const elCls = (el.className || '').toString().toLowerCase();
+    if (elCls.includes('completed') || elCls.includes('done') || elCls.includes('watched') || elCls.includes('finish')) {
+      return true;
+    }
+    if (el.getAttribute('data-completed') === 'true') return true;
+
+    // 2. Contains checkmark icon, SVG, or symbol
+    const icons = el.querySelectorAll('svg, i, span');
+    for (const icon of icons) {
+      const cls = (icon.className?.baseVal || icon.className || '').toString().toLowerCase();
+      const dataIcon = (icon.getAttribute('data-icon') || '').toLowerCase();
+      const ariaLabel = (icon.getAttribute('aria-label') || '').toLowerCase();
+
+      if (cls.includes('check') || cls.includes('tick') || cls.includes('success') ||
+          dataIcon.includes('check') || ariaLabel.includes('complete') || ariaLabel.includes('watched')) {
+        return true;
+      }
+
+      if (icon.textContent && (icon.textContent.includes('✓') || icon.textContent.includes('✔'))) {
+        return true;
+      }
+
+      // Check green stroke or fill colors
+      const stroke = (icon.getAttribute('stroke') || '').toLowerCase();
+      const fill = (icon.getAttribute('fill') || '').toLowerCase();
+      const styleColor = (icon.style?.color || icon.style?.fill || icon.style?.stroke || '').toLowerCase();
+
+      const isGreen = (c) => c.includes('green') || 
+                             c.includes('22c55e') || 
+                             c.includes('16a34a') || 
+                             c.includes('28a745') || 
+                             c.includes('34, 197, 94') || 
+                             c.includes('40, 167, 69') ||
+                             c.includes('0, 138, 0') ||
+                             c.includes('#0f9d58');
+
+      if (isGreen(stroke) || isGreen(fill) || isGreen(styleColor)) {
+        if (icon.tagName.toLowerCase() === 'svg' || icon.querySelector('svg, path, circle')) {
+          return true;
+        }
+      }
+    }
+
+    // 3. Computed style check for green checkmark badge
+    const children = el.querySelectorAll('svg, span, div');
+    for (const child of children) {
+      try {
+        const rect = child.getBoundingClientRect();
+        if (rect.width >= 8 && rect.width <= 34 && rect.height >= 8 && rect.height <= 34) {
+          const style = window.getComputedStyle(child);
+          const col = (style.color || '').toLowerCase();
+          const stroke = (style.stroke || '').toLowerCase();
+          const fill = (style.fill || '').toLowerCase();
+          const bg = (style.backgroundColor || '').toLowerCase();
+
+          if (col.includes('34, 197, 94') || col.includes('40, 167, 69') ||
+              stroke.includes('34, 197, 94') || stroke.includes('40, 167, 69') ||
+              fill.includes('34, 197, 94') || fill.includes('40, 167, 69') ||
+              bg.includes('34, 197, 94') || bg.includes('40, 167, 69')) {
+            return true;
+          }
+        }
+      } catch (e) {}
+    }
+
+    return false;
+  }
+
+  function isSidebarItemWatched(itemLink) {
+    if (!itemLink) return false;
+    if (isElementCompleted(itemLink)) return true;
+
+    // Check parent row container (e.g. li, div)
+    let parent = itemLink.parentElement;
+    let levels = 0;
+    while (parent && levels < 4 && parent !== document.body) {
+      if (isElementCompleted(parent)) return true;
+      parent = parent.parentElement;
+      levels++;
+    }
+    return false;
+  }
+
+  function getCurrentSidebarItem() {
+    const currentPath = location.pathname;
+    const allSidebarLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
+    let active = allSidebarLinks.find(a => a.pathname === currentPath || a.href === location.href);
+    if (active) return active;
+
+    active = allSidebarLinks.find(a => {
+      const cls = (a.className || '').toLowerCase();
+      const pCls = (a.parentElement?.className || '').toLowerCase();
+      return cls.includes('active') || cls.includes('selected') || pCls.includes('active') || pCls.includes('selected');
+    });
+    return active || null;
+  }
+
+  // ----------------------------------------------------------------------
+  // 3. STATE CONTROLLER (ANTI-SKIP & AUTO-NEXT)
   // ----------------------------------------------------------------------
   let targetSpeed = 2.0;
   let isMuted = true;
   let isPaused = false;
   let completedCount = 0;
 
-  // Anti-skip state variables
   let isNavigating = false;
   let navigationCooldownUntil = 0;
   let activeVideoKey = '';
@@ -108,59 +253,13 @@
   let waitingForCredit = false;
   let creditDeadline = 0;
   let lastUrl = location.href;
-  let startUrl = location.href;
-  let pageLoadTime = Date.now();
 
-  // Already-watched video state variables
-  let isAlreadyWatchedSkipping = false;
-  let alreadyWatchedDeadline = 0;
-
-  // Quiz / Non-video state variables
   let nonVideoPageTicks = 0;
   let isQuizSkipping = false;
   let quizSkipDeadline = 0;
 
-  // Unthrottled Worker fallback navigation state
-  let pendingFallbackNavigationUrl = null;
-  let pendingFallbackNavigationTime = 0;
-
-  // ----------------------------------------------------------------------
-  // 3. COMPLETION CHECK HELPERS
-  // ----------------------------------------------------------------------
-  function isElementCompleted(el) {
-    if (!el) return false;
-    const container = el.closest('li, div[class*="item"], div[class*="row"], div[class*="card"]') || el;
-
-    // 1. Check for checkmark icon or SVG inside element or container
-    const hasCheckmark = container.querySelector('svg[class*="check"], svg[class*="tick"], i[class*="check"], i[class*="tick"], span[class*="check"]') !== null;
-
-    // 2. Check for completed classes
-    const classStr = ((container.className || '') + ' ' + (el.className || '')).toLowerCase();
-    const hasCompletedClass = classStr.includes('completed') || classStr.includes('watched') || classStr.includes('done') || classStr.includes('is-completed');
-
-    // 3. Check for checkmark characters
-    const text = container.innerText || container.textContent || '';
-    const hasCheckChar = text.includes('✔') || text.includes('✓');
-
-    // 4. Check for green filled SVGs (GFG checkmark circles)
-    const svgs = Array.from(container.querySelectorAll('svg'));
-    const hasGreenSvg = svgs.some(svg => {
-      const str = (svg.getAttribute('fill') || '') + ' ' + (svg.getAttribute('stroke') || '') + svg.innerHTML;
-      return str.includes('#22c55e') || str.includes('#28a745') || str.includes('rgb(34, 197, 94)') || str.includes('rgb(40, 167, 69)') || str.includes('#005a9c');
-    });
-
-    return hasCheckmark || hasCompletedClass || hasCheckChar || hasGreenSvg;
-  }
-
-  function isCurrentPageCompleted() {
-    // Look for link corresponding to current page in sidebar
-    const allLinks = Array.from(document.querySelectorAll('a[href*="/track/"], a[href*="/video/"], a[href*="/batch/"]'));
-    const currentLink = allLinks.find(a => a.href === location.href || (a.pathname === location.pathname && a.pathname.length > 5));
-    if (currentLink && isElementCompleted(currentLink)) {
-      return true;
-    }
-    return false;
-  }
+  let isSkippingAlreadyWatched = false;
+  let alreadyWatchedSkipDeadline = 0;
 
   // ----------------------------------------------------------------------
   // 4. FLOATING HUD USER INTERFACE
@@ -211,7 +310,7 @@
         <div style="display: flex; gap: 4px;">
           <button id="gfg-btn-spd" style="background: #0284c7; color: white; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;">2.0x</button>
           <button id="gfg-btn-vol" style="background: #334155; color: white; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">🔇 Muted</button>
-          <button id="gfg-btn-skip" style="background: #eab308; color: #0f172a; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;" title="Skip current video or quiz immediately">⏩ Skip</button>
+          <button id="gfg-btn-skip" style="background: #eab308; color: #0f172a; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;" title="Skip current video/quiz immediately">⏩ Skip</button>
         </div>
         <button id="gfg-btn-state" style="background: #22c55e; color: white; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;">Running</button>
       </div>
@@ -236,8 +335,7 @@
       setStatus('Manual Skip triggered! Advancing...', '#eab308');
       waitingForCredit = false;
       isQuizSkipping = false;
-      isAlreadyWatchedSkipping = false;
-      navigationCooldownUntil = 0;
+      isSkippingAlreadyWatched = false;
       advanceToNext();
     });
 
@@ -269,60 +367,35 @@
   }
 
   // ----------------------------------------------------------------------
-  // 5. NAVIGATION ENGINE (FINDS NEXT UNWATCHED VIDEO OR ADVANCES)
+  // 5. NAVIGATION ENGINE (FINDS NEXT UNWATCHED VIDEO OR ADVANCES TRACK)
   // ----------------------------------------------------------------------
   function findNextTarget() {
     const allSidebarLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
     const currentPath = location.pathname;
     const currentLinkIndex = allSidebarLinks.findIndex(a => a.pathname === currentPath || a.href === location.href);
 
-    // Strategy 1: Look forward from current position for the next UNWATCHED video link
+    // Strategy 1: Look FORWARD from current item for the FIRST UNWATCHED VIDEO link
     if (currentLinkIndex !== -1) {
       for (let i = currentLinkIndex + 1; i < allSidebarLinks.length; i++) {
         const link = allSidebarLinks[i];
-        if (link.href.includes('/video/') && !isElementCompleted(link)) {
-          console.log('[GFG Auto v3.1] Found next UNWATCHED video in sidebar:', link);
-          return link;
-        }
-      }
-
-      // If all subsequent items are completed, look forward for any subsequent video link
-      for (let i = currentLinkIndex + 1; i < allSidebarLinks.length; i++) {
-        const link = allSidebarLinks[i];
-        if (link.href.includes('/video/')) {
-          console.log('[GFG Auto v3.1] Found next video link in sidebar:', link);
+        if (link.href.includes('/video/') && !isSidebarItemWatched(link)) {
+          console.log('[GFG Auto v3.1] Found next UNWATCHED video forward in playlist:', link);
           return link;
         }
       }
     }
 
-    // Strategy 2: Check all video links on the page for first unwatched video link
-    const videoLinks = Array.from(document.querySelectorAll('a[href*="/video/"]'));
-    if (videoLinks.length > 0) {
-      const unwatched = videoLinks.find(a => !isElementCompleted(a) && a.href !== location.href);
-      if (unwatched) {
-        console.log('[GFG Auto v3.1] Found unwatched video link on page:', unwatched);
-        return unwatched;
-      }
-
-      const currIdx = videoLinks.findIndex(a => a.href === location.href || location.href.includes(a.getAttribute('href') || ''));
-      if (currIdx !== -1 && currIdx + 1 < videoLinks.length) {
-        return videoLinks[currIdx + 1];
-      }
+    // Strategy 2: If no unwatched video ahead in this section, check entire sidebar for ANY unwatched video
+    const allVideoLinks = Array.from(document.querySelectorAll('a[href*="/video/"]'));
+    const unwatchedVideo = allVideoLinks.find(a => a.href !== location.href && !isSidebarItemWatched(a));
+    if (unwatchedVideo) {
+      console.log('[GFG Auto v3.1] Found unwatched video link in sidebar:', unwatchedVideo);
+      return unwatchedVideo;
     }
 
-    // Strategy 3: "Next Track" button (advances to next course module)
-    const allButtons = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
-    const nextTrack = allButtons.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.includes('next') && text.includes('track') && !text.includes('prev');
-    });
-    if (nextTrack) return nextTrack;
-
-    // Strategy 4: Exact top-right "Next »", "Next >>", "Next"
-    const exactNext = allButtons.find(el => {
+    // Strategy 3: Top-right "Next »" button
+    const all = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
+    const exactNext = all.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
@@ -330,8 +403,17 @@
     });
     if (exactNext) return exactNext;
 
-    // Strategy 5: Any generic button starting with "next" (not prev)
-    const genericNext = allButtons.find(el => {
+    // Strategy 4: "Next Track" button (advances to next course module when this track is complete!)
+    const nextTrack = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return text.includes('next') && text.includes('track') && !text.includes('prev');
+    });
+    if (nextTrack) return nextTrack;
+
+    // Strategy 5: Any generic button starting with "next"
+    const genericNext = all.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
@@ -345,14 +427,14 @@
   function advanceToNext() {
     const now = Date.now();
     if (now < navigationCooldownUntil) return;
-    navigationCooldownUntil = now + 4000; // 4-second cooldown after initiating advance
+    navigationCooldownUntil = now + 8000; // 8-second navigation cooldown
 
     isNavigating = true;
     activeVideoPlayedSeconds = 0;
     activeVideoKey = '';
     waitingForCredit = false;
     isQuizSkipping = false;
-    isAlreadyWatchedSkipping = false;
+    isSkippingAlreadyWatched = false;
 
     setStatus('Advancing to next video/track...', '#38bdf8');
     const target = findNextTarget();
@@ -360,20 +442,24 @@
     if (target) {
       console.log('[GFG Auto v3.1] Advancing target:', target);
       
-      // Dispatch complete synthetic mouse event chain
-      ['mouseover', 'mouseenter', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
+      // Dispatch synthetic mouse event sequence
+      ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
         try {
           target.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
         } catch (e) {}
       });
       try { target.click(); } catch (e) {}
-      try { window.dispatchEvent(new Event('focus')); } catch (e) {}
 
-      // If it's a link, enforce unthrottled navigation fallback via Web Worker
+      // Background fallback navigation if React delays click
       const destUrl = target.href || target.getAttribute('href') || target.querySelector('a')?.href;
       if (destUrl && !destUrl.startsWith('javascript:')) {
-        pendingFallbackNavigationUrl = destUrl;
-        pendingFallbackNavigationTime = Date.now() + 1500;
+        const startUrl = location.href;
+        setTimeout(() => {
+          if (location.href === startUrl) {
+            console.log('[GFG Auto v3.1] Background fallback navigation to:', destUrl);
+            window.location.href = destUrl;
+          }
+        }, 1500);
       }
 
       completedCount++;
@@ -391,40 +477,50 @@
   function handleTick() {
     if (isPaused) return;
 
-    // Detect SPA URL changes
+    // Detect SPA URL navigation
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      startUrl = location.href;
-      pageLoadTime = Date.now();
       isNavigating = false;
       waitingForCredit = false;
       isQuizSkipping = false;
-      isAlreadyWatchedSkipping = false;
-      pendingFallbackNavigationUrl = null;
+      isSkippingAlreadyWatched = false;
       nonVideoPageTicks = 0;
       activeVideoPlayedSeconds = 0;
       activeVideoKey = '';
-      navigationCooldownUntil = Date.now() + 2500; // 2.5s initial buffer on new page
       setStatus('New page loaded. Initializing...', '#38bdf8');
       createHUD();
     }
 
-    // Unthrottled Worker fallback navigation check
-    if (pendingFallbackNavigationUrl && Date.now() >= pendingFallbackNavigationTime) {
-      if (location.href === startUrl) {
-        const dest = pendingFallbackNavigationUrl;
-        pendingFallbackNavigationUrl = null;
-        console.log('[GFG Auto v3.1] Unthrottled Worker fallback navigation to:', dest);
-        window.location.href = dest;
-        return;
+    const currentSidebarItem = getCurrentSidebarItem();
+    const isCurrentItemCompleted = isSidebarItemWatched(currentSidebarItem);
+
+    // -----------------------------------------------------------
+    // CASE A: ALREADY WATCHED VIDEO DETECTED (HAS GREEN CHECKMARK)
+    // Prevents hanging on previously completed videos!
+    // -----------------------------------------------------------
+    if (isCurrentItemCompleted) {
+      if (!isSkippingAlreadyWatched) {
+        isSkippingAlreadyWatched = true;
+        alreadyWatchedSkipDeadline = Date.now() + 2000; // 2s notice
+        setStatus('✅ Video already watched & credited! Skipping in 2s...', '#22c55e');
+      } else {
+        const remSec = Math.max(0, Math.ceil((alreadyWatchedSkipDeadline - Date.now()) / 1000));
+        setStatus(`✅ Video already watched! Skipping to next unwatched in ${remSec}s...`, '#22c55e');
+        if (Date.now() >= alreadyWatchedSkipDeadline) {
+          isSkippingAlreadyWatched = false;
+          advanceToNext();
+        }
       }
-      pendingFallbackNavigationUrl = null;
+      return;
     }
+
+    // Reset skip state if current item is not completed
+    isSkippingAlreadyWatched = false;
 
     const video = document.querySelector('video');
 
     // -----------------------------------------------------------
-    // CASE A: NO VIDEO PLAYER ON PAGE (QUIZ / ARTICLE / PROBLEM)
+    // CASE B: NO VIDEO PLAYER ON PAGE (QUIZ / ARTICLE / PROBLEM)
     // -----------------------------------------------------------
     if (!video) {
       nonVideoPageTicks++;
@@ -434,11 +530,10 @@
                               location.pathname.includes('/problem/') || 
                               location.pathname.includes('/article/');
 
-      // If on a quiz/problem page, or if no video player exists after 4 seconds
       if (isQuizOrProblem || nonVideoPageTicks >= 4) {
         if (!isQuizSkipping) {
           isQuizSkipping = true;
-          quizSkipDeadline = Date.now() + 2000; // 2s auto-skip notice
+          quizSkipDeadline = Date.now() + 2500;
           setStatus('📝 Quiz / Non-video page detected! Skipping in 2s...', '#eab308');
         } else {
           const remSec = Math.max(0, Math.ceil((quizSkipDeadline - Date.now()) / 1000));
@@ -454,28 +549,26 @@
       return;
     }
 
-    // Reset non-video counter once video is found
+    // Video player exists
     nonVideoPageTicks = 0;
     isQuizSkipping = false;
 
-    // -----------------------------------------------------------
-    // CASE B: VIDEO PLAYER EXISTS
-    // -----------------------------------------------------------
-    const timeSincePageLoad = Date.now() - pageLoadTime;
-
-    // Identify current video
+    // Identify current video stream
     const currentVideoSrc = video.currentSrc || video.src || location.href;
     const currentVideoKey = location.href + '#' + currentVideoSrc;
 
-    // Recognize video
-    if (activeVideoKey !== currentVideoKey && video.duration > 3) {
-      activeVideoKey = currentVideoKey;
-      isNavigating = false;
-      waitingForCredit = false;
-      console.log('[GFG Auto v3.1] Video recognized. Duration:', video.duration, 'CurrentTime:', video.currentTime);
+    // If new video stream is recognized
+    if (activeVideoKey !== currentVideoKey) {
+      if (video.duration > 5 && video.currentTime < 5) {
+        activeVideoKey = currentVideoKey;
+        activeVideoPlayedSeconds = 0;
+        isNavigating = false;
+        waitingForCredit = false;
+        console.log('[GFG Auto v3.1] New video recognized. Duration:', video.duration);
+      }
     }
 
-    // If currently waiting for GFG server credit countdown
+    // If currently waiting for server credit heartbeat
     if (waitingForCredit) {
       const remainingMs = creditDeadline - Date.now();
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -488,44 +581,18 @@
       return;
     }
 
-    // -----------------------------------------------------------
-    // DETECT ALREADY WATCHED VIDEO
-    // If the video is already completed on page load, DO NOT HANG!
-    // Advance automatically to the next video after 2 seconds notice.
-    // -----------------------------------------------------------
-    const isSidebarCompleted = isCurrentPageCompleted();
-    const isEndedOnLoad = (video.duration > 5) && 
-                          (video.ended || video.currentTime >= (video.duration - 2.0)) && 
-                          (activeVideoPlayedSeconds === 0);
-
-    if (timeSincePageLoad >= 2500 && (isSidebarCompleted || isEndedOnLoad)) {
-      if (!isAlreadyWatchedSkipping) {
-        isAlreadyWatchedSkipping = true;
-        alreadyWatchedDeadline = Date.now() + 2000;
-        setStatus('✅ Already completed video detected! Advancing in 2s...', '#22c55e');
-      } else {
-        const remSec = Math.max(0, Math.ceil((alreadyWatchedDeadline - Date.now()) / 1000));
-        setStatus(`✅ Already watched! Skipping to next video in ${remSec}s...`, '#22c55e');
-        if (Date.now() >= alreadyWatchedDeadline) {
-          isAlreadyWatchedSkipping = false;
-          advanceToNext();
-        }
-      }
-      return;
-    }
-
-    // While in navigation cooldown, do not trigger any completion checks!
+    // While in navigation cooldown, prevent premature completion
     if (isNavigating || Date.now() < navigationCooldownUntil) {
       setStatus('Preparing video playback...', '#38bdf8');
       return;
     }
 
-    // Enforce 2.0x playback speed
+    // Enforce 2.0x playback rate
     if (video.playbackRate !== targetSpeed) {
       video.playbackRate = targetSpeed;
     }
 
-    // Enforce mute state (enables reliable background autoplay)
+    // Enforce mute for seamless background autoplay
     if (video.muted !== isMuted) {
       video.muted = isMuted;
     }
@@ -539,33 +606,26 @@
         if (btnVol) btnVol.innerText = '🔇 Muted';
         video.play().catch(() => {});
       });
-      return;
     }
 
-    // Track real watch time while playing
+    // Track active watch time
     if (!video.paused && video.duration > 5 && !video.ended) {
       activeVideoPlayedSeconds++;
     }
 
     // -----------------------------------------------------------
-    // STRICT ANTI-SKIP COMPLETION CHECK
-    // Must satisfy:
-    // 1. Video duration must be valid (>5s)
-    // 2. Video must have actually been played by this session (activeVideoPlayedSeconds >= 6,
-    //    or activeVideoPlayedSeconds >= 2 if opening a video that was already near completion)
-    // 3. Current time must be near the end (> duration - 1.0s) OR ended is true
-    // 4. Video currentTime must be > 5s (never complete on newly loaded 0s videos)
+    // COMPLETION CHECK
+    // 1. Video ended or at end frame with at least 5s played
+    // 2. OR video has reached >= 98% of duration
     // -----------------------------------------------------------
-    const hasSufficientWatchTime = (activeVideoPlayedSeconds >= 6) || 
-      (video.duration > 5 && (video.duration - video.currentTime <= 3.0) && activeVideoPlayedSeconds >= 2);
-    
-    const isAtEnd = video.currentTime > 5 && hasSufficientWatchTime && 
+    const hasPlayedSufficiently = activeVideoPlayedSeconds >= 5;
+    const isAtEnd = video.currentTime > 5 && hasPlayedSufficiently && 
       (video.ended || (video.duration > 5 && video.currentTime >= (video.duration - 1.0)));
 
     if (isAtEnd && !waitingForCredit) {
       waitingForCredit = true;
-      creditDeadline = Date.now() + 4000; // 4-second credit heartbeat wait
-      setStatus('Video ended! Recording credit (4s)...', '#f59e0b');
+      creditDeadline = Date.now() + 3500; // 3.5-second credit heartbeat wait
+      setStatus('Video ended! Recording credit (3s)...', '#f59e0b');
       return;
     }
 
@@ -583,7 +643,7 @@
   }
 
   // ----------------------------------------------------------------------
-  // 7. UNTHROTTLED WEB WORKER HEARTBEAT (RUNS ON BACKGROUND VIRTUAL DESKTOPS)
+  // 7. UNTHROTTLED WEB WORKER HEARTBEAT (RUNS ACROSS VIRTUAL DESKTOPS)
   // ----------------------------------------------------------------------
   try {
     const workerScript = `
@@ -596,7 +656,7 @@
     worker.onmessage = function () {
       handleTick();
     };
-    console.log('[GFG Auto v3.1] Web Worker background heartbeat started.');
+    console.log('[GFG Auto v3.1] Web Worker background heartbeat active.');
   } catch (err) {
     console.warn('[GFG Auto v3.1] Worker fallback to setInterval:', err);
     setInterval(handleTick, 1000);
@@ -604,5 +664,5 @@
 
   setInterval(handleTick, 1000);
 
-  console.log('%c[GFG Auto-Advancer v3.1] Watched-Skip + Anti-Skip + Background Sync Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
+  console.log('%c[GFG Auto-Advancer v3.1] Anti-Hang + Auto-Skip Watched + Background Sync Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
 })();
