@@ -1,20 +1,20 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v2.0_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.0_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, and automatically advances videos even in **background tabs, minimized windows, or other Windows virtual desktops**.
+A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, automatically skips quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
 
 ---
 
-## ✨ What's New in v2.0
+## ✨ What's New in v3.0
 
-- 🌐 **Full Background & Virtual Desktop Support:** Uses unthrottled Web Worker timers so Chrome won't freeze the countdown when the tab is hidden or on another Windows virtual desktop.
-- ⚡ **Native Event Hooks:** Bypasses timer throttling with native HTML5 `ended` listeners.
-- 🚀 **Forced Navigation Fallback:** Automatically forces URL navigation if React defers synthetic click events while hidden.
-- 🎵 **Audio Pipeline Keep-Alive:** Prevents Chrome from putting the tab into deep hibernation.
+- 🛡️ **Anti-Skip Protection:** Completely eliminates video skipping caused by React SPA element reuse. Enforces verified watch time and a 9-second navigation cooldown so videos never jump ahead prematurely.
+- 📝 **Auto-Skip Quizzes & Problems:** Detects non-video pages (quizzes, coding problems, articles) and automatically scans forward in the sidebar playlist to jump straight to the next video track.
+- 🔄 **Real-Time Sidebar Progress Sync in Background:** Spoofs Page Visibility (`document.hidden = false`) and patches `requestAnimationFrame` so GFG's React engine keeps updating the left sidebar's video length, progress bar, and completion checkmarks without needing you to focus or visit the tab.
+- ⏩ **Manual Skip Control:** Added an instant `⏩ Skip` button in the floating HUD for on-demand advancement.
 
 ---
 
