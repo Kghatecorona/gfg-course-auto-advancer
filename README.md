@@ -1,11 +1,20 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.4_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.5_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, skips already watched videos and quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
+A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, skips already watched videos, problems, and quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
+
+---
+
+## ✨ What's New in v3.5
+
+- ⏭️ **Auto-Advance to Next Track (Skips Problems & Quizzes):** When all videos in a track reach 100% completion or when GFG prompts `Go to Problems »`, the extension automatically clicks the `>> Next Track` button at the bottom of the sidebar, skipping coding problems and quizzes to keep video playback uninterrupted across course modules.
+- 🛑 **Cooldown Auto-Expiry Fix:** Eliminated permanent stalls on `Preparing video playback...` by replacing static state locks with strict 4-second timestamp cooldowns that auto-reset.
+- 🔍 **Unticked Video Fast-Seek:** Scans sidebar video rows and immediately jumps to the first unwatched (unticked) video if playback hasn't started.
+- 🛡️ **Quiz & Practice Auto-Bypass:** Safely detects `/quiz/`, `/problem/`, and `/practice/` pages and advances directly to the next track within 2 seconds.
 
 ---
 

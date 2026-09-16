@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GFG Course Auto-Advancer (v3.4 - Infinite Loop Fix & Native Next Button Integration)
+// @name         GFG Course Auto-Advancer (v3.5 - Auto Next Track & Problems/Quiz Skip)
 // @namespace    https://geeksforgeeks.org/
-// @version      3.4
-// @description  Automates GFG courses at 2x. Fixes page reload infinite loop, clicks native Next button, auto-skips completed videos, and tracks background progress.
+// @version      3.5
+// @description  Automates GFG courses at 2x. Automatically skips 'Go to Problems' and Quizzes to jump straight to Next Track, fixes cooldown stalls, and auto-plays videos continuously.
 // @author       Kavyansh
 // @match        https://*.geeksforgeeks.org/batch/*
 // @match        https://geeksforgeeks.org/batch/*
@@ -13,11 +13,11 @@
 (function () {
   'use strict';
 
-  if (window.__gfg_auto_advancer_v34_active) {
-    console.log('[GFG Auto v3.4] Script already active!');
+  if (window.__gfg_auto_advancer_v35_active) {
+    console.log('[GFG Auto v3.5] Script already active!');
     return;
   }
-  window.__gfg_auto_advancer_v34_active = true;
+  window.__gfg_auto_advancer_v35_active = true;
 
   // ----------------------------------------------------------------------
   // 1. BACKGROUND TRACKING SPOOFS (hasFocus, Visibility, rAF, IntersectionObserver)
@@ -67,8 +67,8 @@
     // 1.5 Spoof IntersectionObserver so GFG player always thinks video is visible in viewport
     try {
       const OrigIO = window.IntersectionObserver;
-      if (OrigIO && !window.__gfg_io_v34_patched) {
-        window.__gfg_io_v34_patched = true;
+      if (OrigIO && !window.__gfg_io_v35_patched) {
+        window.__gfg_io_v35_patched = true;
         window.IntersectionObserver = function (callback, options) {
           const wrappedCallback = (entries, observer) => {
             const spoofed = entries.map(entry => {
@@ -136,8 +136,6 @@
 
   // ----------------------------------------------------------------------
   // 2. SOLID DARK-GREEN CHECKMARK DETECTOR
-  // Accurately recognizes GFG brand solid green #2f8d46 (RGB 47, 141, 70)
-  // and distinguishes it from hollow/uncompleted circles
   // ----------------------------------------------------------------------
   function isSolidDarkGreen(colorStr) {
     if (!colorStr || typeof colorStr !== 'string') return false;
@@ -200,86 +198,122 @@
     return false;
   }
 
-  // Check if current video in sidebar has the solid green checkmark
-  function isCurrentVideoCompletedInSidebar() {
-    const mainTitle = (document.querySelector('h1, h2, div[class*="video-title"]') || {}).textContent || '';
-    const cleanTitle = mainTitle.trim().toLowerCase();
-
+  function getAllSidebarVideoRows() {
     const allElements = Array.from(document.querySelectorAll('*'));
-    const sidebarRows = allElements.filter(el => {
+    const sidebarDurationNodes = allElements.filter(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.left > 360) return false;
-      const txt = (el.innerText || '').trim();
+      const txt = (el.innerText || el.textContent || '').trim();
       return txt.startsWith('Duration:');
     });
 
-    for (const dNode of sidebarRows) {
+    const rows = [];
+    for (const dNode of sidebarDurationNodes) {
       let row = dNode;
       while (row && row.parentElement && row.parentElement !== document.body) {
         const parent = row.parentElement;
-        const count = Array.from(parent.querySelectorAll('*')).filter(e => (e.innerText || '').trim().startsWith('Duration:')).length;
+        const count = Array.from(parent.querySelectorAll('*')).filter(e => (e.innerText || e.textContent || '').trim().startsWith('Duration:')).length;
         if (count > 1) break;
         row = parent;
       }
+      if (row && !rows.includes(row)) {
+        rows.push(row);
+      }
+    }
+    return rows;
+  }
 
-      if (row) {
-        const rowText = (row.innerText || '').toLowerCase();
-        const isCurrent = (cleanTitle.length > 3 && rowText.includes(cleanTitle)) ||
-                          row.className?.includes?.('active') ||
-                          row.className?.includes?.('selected');
-        if (isCurrent && isElementTicked(row)) {
-          return true;
-        }
+  function isCurrentVideoCompletedInSidebar() {
+    const mainTitle = (document.querySelector('h1, h2, div[class*="video-title"]') || {}).textContent || '';
+    const cleanTitle = mainTitle.trim().toLowerCase();
+    const rows = getAllSidebarVideoRows();
+
+    for (const row of rows) {
+      const rowText = (row.innerText || row.textContent || '').toLowerCase();
+      const isCurrent = (cleanTitle.length > 3 && rowText.includes(cleanTitle)) ||
+                        row.className?.includes?.('active') ||
+                        row.className?.includes?.('selected');
+      if (isCurrent && isElementTicked(row)) {
+        return true;
       }
     }
 
     return false;
   }
 
+  function findFirstUntickedVideoInSidebar() {
+    const rows = getAllSidebarVideoRows();
+    for (const row of rows) {
+      if (!isElementTicked(row)) {
+        return row;
+      }
+    }
+    return null;
+  }
+
   // ----------------------------------------------------------------------
-  // 3. NATIVE GFG BUTTON FINDER (TOP-RIGHT NEXT » BUTTON)
+  // 3. NAVIGATION TARGET LOCATOR
   // ----------------------------------------------------------------------
+  function findNextTrackButton() {
+    const all = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"], div, span'));
+    const found = all.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return txt.includes('next') && txt.includes('track') && !txt.includes('prev');
+    });
+    if (!found) return null;
+    return found.closest('button, a, [role="button"]') || found;
+  }
+
   function findGFGNextButton() {
     const all = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
 
-    // 1. Top-right exact "Next »" button above video player
-    const topNext = all.find(el => {
+    // Top-right button above video player
+    const topBtn = all.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      const isNext = (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >' || text === 'next ›');
-      return isNext && r.top < 200 && r.left > 400;
+      const isNextOrProblems = (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >' || text.includes('problem'));
+      return isNextOrProblems && r.top < 200 && r.left > 400;
     });
-    if (topNext) return topNext;
+    if (topBtn) return topBtn;
 
-    // 2. Any exact "Next »" button on page
+    // Any exact Next » button
     const exactNext = all.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
       const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >' || text === 'next ›');
+      return (text === 'next' || text === 'next »' || text === 'next >>' || text === 'next >');
     });
     if (exactNext) return exactNext;
 
-    // 3. "Next Track" button (advances to next course track when all videos in track are done)
-    const nextTrack = all.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.includes('next') && text.includes('track') && !text.includes('prev');
-    });
-    if (nextTrack) return nextTrack;
-
-    // 4. Any generic button starting with "next"
-    const genericNext = all.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const text = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return text.startsWith('next') && !text.includes('prev');
-    });
-    if (genericNext) return genericNext;
-
     return null;
+  }
+
+  function clickElement(target) {
+    if (!target) return;
+    
+    // Dispatch synthetic mouse sequence
+    ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
+      try {
+        target.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
+      } catch (e) {}
+    });
+    try { target.click(); } catch (e) {}
+
+    // Safe fallback navigation: NEVER navigate to current page URL (prevents reload loop)
+    const anchor = target.tagName === 'A' ? target : (target.querySelector('a') || target.closest('a'));
+    const destUrl = anchor?.href;
+    if (destUrl && destUrl !== location.href && !destUrl.startsWith('javascript:')) {
+      const startUrl = location.href;
+      setTimeout(() => {
+        if (location.href === startUrl && destUrl !== location.href) {
+          console.log('[GFG Auto v3.5] Direct navigation fallback to:', destUrl);
+          window.location.href = destUrl;
+        }
+      }, 1500);
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -290,7 +324,6 @@
   let isPaused = false;
   let completedCount = 0;
 
-  let isNavigating = false;
   let navigationCooldownUntil = 0;
   let activeVideoKey = '';
   let waitingForCredit = false;
@@ -337,7 +370,7 @@
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 6px;">
         <span style="font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
           <span id="gfg-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;"></span>
-          GFG Auto-Advancer v3.4
+          GFG Auto-Advancer v3.5
         </span>
         <span id="gfg-badge-count" style="background: #1e293b; color: #38bdf8; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 600;">
           Done: 0
@@ -379,6 +412,7 @@
       isQuizSkipping = false;
       isSkippingAlreadyWatched = false;
       endFrameTicks = 0;
+      navigationCooldownUntil = 0;
       advanceToNext();
     });
 
@@ -410,57 +444,98 @@
   }
 
   // ----------------------------------------------------------------------
-  // 5. NAVIGATION ENGINE (CLICKS NATIVE NEXT BUTTON & PREVENTS PAGE RELOADS)
+  // 5. ADVANCEMENT ENGINE (SKIPS PROBLEMS & QUIZZES TO JUMP TO NEXT TRACK)
   // ----------------------------------------------------------------------
   function advanceToNext() {
     const now = Date.now();
     if (now < navigationCooldownUntil) return;
-    navigationCooldownUntil = now + 4000; // 4-second cooldown between advances
+    navigationCooldownUntil = now + 4000; // 4-second cooldown
 
-    isNavigating = true;
-    activeVideoKey = '';
     waitingForCredit = false;
     isQuizSkipping = false;
     isSkippingAlreadyWatched = false;
     endFrameTicks = 0;
 
     setStatus('Advancing to next video/track...', '#38bdf8');
-    const target = findGFGNextButton();
 
-    if (target) {
-      console.log('[GFG Auto v3.4] Advancing via Next button:', target);
+    const sidebarRows = getAllSidebarVideoRows();
+    const allSidebarVideosCompleted = sidebarRows.length > 0 && sidebarRows.every(r => isElementTicked(r));
 
-      // Extract destination URL if it's an anchor
-      const anchor = target.tagName === 'A' ? target : (target.querySelector('a') || target.closest('a'));
-      const destUrl = anchor?.href;
+    // 1. Detect if all track videos are done OR if top-right says "Go to Problems"
+    const allButtons = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
+    const goToProblemsBtn = allButtons.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return txt.includes('problem') && (txt.includes('go to') || txt.includes('next'));
+    });
 
-      // Dispatch complete synthetic mouse sequence
-      ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(evtType => {
-        try {
-          target.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
-        } catch (e) {}
-      });
-      try { target.click(); } catch (e) {}
+    const is100PercentDone = (document.body.innerText || '').includes('100%') || 
+                             (document.body.innerText || '').includes('Complete. (100%)');
 
-      // CRITICAL BUG FIX: NEVER navigate if destUrl is the CURRENT PAGE URL!
-      // This permanently stops the 3-second reload infinite loop.
-      if (destUrl && destUrl !== location.href && !destUrl.startsWith('javascript:')) {
-        const startUrl = location.href;
-        setTimeout(() => {
-          if (location.href === startUrl && destUrl !== location.href) {
-            console.log('[GFG Auto v3.4] Direct URL navigation fallback to:', destUrl);
-            window.location.href = destUrl;
-          }
-        }, 1500);
+    // If videos in this track are complete, SKIP PROBLEMS AND GO DIRECTLY TO NEXT TRACK!
+    if (goToProblemsBtn || is100PercentDone || allSidebarVideosCompleted) {
+      const nextTrack = findNextTrackButton();
+      if (nextTrack) {
+        console.log('[GFG Auto v3.5] Track videos finished! Advancing to Next Track:', nextTrack);
+        setStatus('🎉 All videos complete! Advancing to Next Track...', '#22c55e');
+        clickElement(nextTrack);
+        completedCount++;
+        const badgeCount = document.getElementById('gfg-badge-count');
+        if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
+        return;
+      }
+    }
+
+    // 2. If there are unticked videos in sidebar, try to click the first unticked video!
+    const untickedRow = findFirstUntickedVideoInSidebar();
+    if (untickedRow) {
+      console.log('[GFG Auto v3.5] Found unwatched video in sidebar, clicking:', untickedRow);
+      setStatus('Playing next unwatched video...', '#22c55e');
+      clickElement(untickedRow);
+      completedCount++;
+      const badgeCount = document.getElementById('gfg-badge-count');
+      if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
+      return;
+    }
+
+    // 3. Normal Next » button
+    const nextBtn = findGFGNextButton();
+    if (nextBtn) {
+      const btnText = (nextBtn.innerText || nextBtn.textContent || '').trim().toLowerCase();
+      // If the button says "Go to Problems" or mentions quiz, skip problems and advance to Next Track
+      if (btnText.includes('problem') || btnText.includes('quiz') || btnText.includes('article')) {
+        const nextTrack = findNextTrackButton();
+        if (nextTrack) {
+          console.log('[GFG Auto v3.5] Skipping problems -> Advancing to Next Track:', nextTrack);
+          setStatus('Skipping problems -> Advancing to Next Track...', '#22c55e');
+          clickElement(nextTrack);
+          completedCount++;
+          const badgeCount = document.getElementById('gfg-badge-count');
+          if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
+          return;
+        }
       }
 
+      console.log('[GFG Auto v3.5] Clicking Next button:', nextBtn);
+      clickElement(nextBtn);
       completedCount++;
       const badgeCount = document.getElementById('gfg-badge-count');
       if (badgeCount) badgeCount.innerText = `Done: ${completedCount}`;
       setStatus('Clicked Next! Advancing...', '#22c55e');
-    } else {
-      setStatus('Could not locate Next button. Check playlist!', '#f59e0b');
+      return;
     }
+
+    // 4. Fallback: Next Track button
+    const nextTrack = findNextTrackButton();
+    if (nextTrack) {
+      console.log('[GFG Auto v3.5] Clicking Next Track fallback:', nextTrack);
+      clickElement(nextTrack);
+      setStatus('Advancing to Next Track...', '#22c55e');
+      return;
+    }
+
+    setStatus('No Next item or track found.', '#f59e0b');
   }
 
   // ----------------------------------------------------------------------
@@ -472,13 +547,13 @@
     // Detect URL changes
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      isNavigating = false;
       waitingForCredit = false;
       isQuizSkipping = false;
       isSkippingAlreadyWatched = false;
       nonVideoPageTicks = 0;
       activeVideoKey = '';
       endFrameTicks = 0;
+      navigationCooldownUntil = 0; // Clear cooldown immediately on URL change!
       setStatus('New page loaded. Initializing...', '#38bdf8');
       createHUD();
     }
@@ -491,7 +566,6 @@
       isQuizSkipping = false;
       isSkippingAlreadyWatched = false;
       waitingForCredit = false;
-      isNavigating = false;
       endFrameTicks = 0;
       setStatus('🏠 Batch Home. Click any track to start auto-playing!', '#38bdf8');
       const btnState = document.getElementById('gfg-btn-state');
@@ -513,6 +587,14 @@
       btnState.innerText = 'Running';
       btnState.style.background = '#22c55e';
       statusDot.style.background = '#22c55e';
+    }
+
+    // -----------------------------------------------------------
+    // NAVIGATION COOLDOWN AUTO-EXPIRY (PREVENTS PERMANENT COOLDOWN STALL)
+    // -----------------------------------------------------------
+    if (Date.now() < navigationCooldownUntil) {
+      setStatus('Preparing video playback...', '#38bdf8');
+      return;
     }
 
     // -----------------------------------------------------------
@@ -540,6 +622,7 @@
 
     // -----------------------------------------------------------
     // CASE B: NO VIDEO PLAYER (QUIZ / PROBLEM / ARTICLE)
+    // Skips non-video content and moves to next track!
     // -----------------------------------------------------------
     if (!video) {
       nonVideoPageTicks++;
@@ -548,14 +631,23 @@
                               location.pathname.includes('/problem/') || 
                               location.pathname.includes('/article/');
 
+      // If on a track page without an active video player, see if an unwatched video is in sidebar
+      const untickedInSidebar = findFirstUntickedVideoInSidebar();
+      if (untickedInSidebar && !isQuizOrProblem && nonVideoPageTicks >= 2) {
+        setStatus('Found unwatched video! Starting playback...', '#22c55e');
+        nonVideoPageTicks = 0;
+        clickElement(untickedInSidebar);
+        return;
+      }
+
       if (isQuizOrProblem || nonVideoPageTicks >= 4) {
         if (!isQuizSkipping) {
           isQuizSkipping = true;
-          quizSkipDeadline = Date.now() + 2500;
-          setStatus('📝 Quiz / Article detected! Skipping to next video in 2s...', '#eab308');
+          quizSkipDeadline = Date.now() + 2000;
+          setStatus('📝 Quiz / Problem detected! Skipping to next track in 2s...', '#eab308');
         } else {
           const remSec = Math.max(0, Math.ceil((quizSkipDeadline - Date.now()) / 1000));
-          setStatus(`📝 Quiz detected! Skipping to next video in ${remSec}s...`, '#eab308');
+          setStatus(`📝 Quiz / Problem detected! Skipping in ${remSec}s...`, '#eab308');
           if (Date.now() >= quizSkipDeadline) {
             isQuizSkipping = false;
             advanceToNext();
@@ -578,10 +670,9 @@
     if (activeVideoKey !== currentVideoKey) {
       if (video.duration > 5) {
         activeVideoKey = currentVideoKey;
-        isNavigating = false;
         waitingForCredit = false;
         endFrameTicks = 0;
-        console.log('[GFG Auto v3.4] Video active. Duration:', video.duration);
+        console.log('[GFG Auto v3.5] Video active. Duration:', video.duration);
       }
     }
 
@@ -595,12 +686,6 @@
         waitingForCredit = false;
         advanceToNext();
       }
-      return;
-    }
-
-    // Navigation cooldown check
-    if (isNavigating || Date.now() < navigationCooldownUntil) {
-      setStatus('Preparing video playback...', '#38bdf8');
       return;
     }
 
@@ -676,13 +761,13 @@
     worker.onmessage = function () {
       handleTick();
     };
-    console.log('[GFG Auto v3.4] Web Worker background heartbeat active.');
+    console.log('[GFG Auto v3.5] Web Worker background heartbeat active.');
   } catch (err) {
-    console.warn('[GFG Auto v3.4] Worker fallback to setInterval:', err);
+    console.warn('[GFG Auto v3.5] Worker fallback to setInterval:', err);
     setInterval(handleTick, 1000);
   }
 
   setInterval(handleTick, 1000);
 
-  console.log('%c[GFG Auto-Advancer v3.4] Infinite Loop Fix + Native Next Engine Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
+  console.log('%c[GFG Auto-Advancer v3.5] Auto Next Track & Problems/Quiz Skip Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
 })();
