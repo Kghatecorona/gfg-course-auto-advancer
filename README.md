@@ -1,6 +1,6 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.1_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.2_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
@@ -9,12 +9,12 @@ A lightweight browser automation tool for **GeeksforGeeks Batch Course** video t
 
 ---
 
-## ✨ What's New in v3.1
+## ✨ What's New in v3.2
 
-- ⏭️ **Auto-Skip Already Watched Videos (Anti-Hang):** Detects if a video is already marked completed (with GFG's green checkmark `✓`) and automatically skips it in 2s, completely resolving the hang on previously viewed videos.
-- 🎯 **Smart Unwatched-Only Progression:** Always scans forward in the course playlist for the next *unwatched* video link, jumping past completed items directly to videos needing credit.
-- 👁️ **Full Background Focus & Progress Tracking:** Spoofs `document.hasFocus() = true`, `IntersectionObserver`, and Page Visibility so GFG's backend heartbeat continues counting watch progress in real time across Windows virtual desktops.
-- 📝 **Auto-Skip Quizzes & Problems:** Automatically bypasses non-video pages to keep continuous video progression.
+- 🏠 **Course Track Scope (Zero False Triggers on Home Page):** Fixed false quiz triggers on the batch home / overview page. The extension now enters a peaceful `Standby` mode when on course overview pages and only activates when you open a course track.
+- 🟢 **Precision Dark-Green Checkmark Detection:** Uses mathematical RGB color analysis (`g > r + 15 && g > b + 15`) to detect GFG's brand dark-green (`#2f8d46` / `rgb(47, 141, 70)`) checkmark badges with 100% accuracy.
+- ⏭️ **Row-Isolated Playlist Traversal:** Accurately isolates each individual video row in the sidebar, preventing false matches and immediately skipping already credited videos.
+- 👁️ **Full Background Focus & Progress Sync:** Overrides `document.hasFocus()`, `IntersectionObserver`, and Page Visibility so watch progress counts continuously across Windows virtual desktops.
 - ⏩ **Manual Skip Control:** On-demand `⏩ Skip` button in the floating HUD.
 
 ---

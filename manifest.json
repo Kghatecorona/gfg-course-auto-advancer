@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer (2x Speed + Auto Next)",
-  "version": "3.1",
-  "description": "Plays GFG course videos at 2x, skips already watched videos & quizzes, prevents hanging, and tracks background progress.",
+  "version": "3.2",
+  "description": "Plays GFG course videos at 2x, skips already watched videos & quizzes, stays idle on home page, and syncs background progress.",
   "permissions": [
     "activeTab"
   ],
