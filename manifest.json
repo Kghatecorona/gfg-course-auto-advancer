@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer",
-  "version": "4.1",
-  "description": "2x speed, muted, skips solid-green completed videos, replays glitched end-frame videos from 0:00, revisits uncompleted track videos, runs across virtual desktops.",
+  "version": "4.2",
+  "description": "Multi-vector checkmark detection (DOM, SVG, ElementFromPoint, React Fiber), 2x speed, muted, glitched end-frame 0:00 auto-replay, track revisit, virtual desktop support.",
   "permissions": [
     "activeTab",
     "alarms"

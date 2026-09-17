@@ -1,6 +1,6 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v4.1_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v4.2_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
@@ -9,17 +9,19 @@ A lean, purpose-built browser automation extension for **GeeksforGeeks Batch Cou
 
 1. 💻 **Works in Background & Virtual Desktops:** Background Service Worker heartbeats and Web Worker timers keep the tab active without timer throttling or freezing when minimized or placed on another Windows desktop.
 2. ⚡ **Muted & 2.0x Speed:** Enforces 2.0x speed and muted autoplay so playback never pauses and doesn't make noise.
-3. 🟢 **Solid Green Tick Precision Detection:** Accurately distinguishes **solid dark-green checkmarks** (`#2f8d46` / `rgb(47, 141, 70)`) from **hollow light-green outline circles** and progress bars, immediately skipping videos that are truly completed.
-4. ↺ **Auto-Replay from 0:00 & Track Revisit:** If a video was previously watched but GFG glitched and opened it stuck at `-0:00` without awarding the tick, the extension automatically resets it to `0:00`, triggers the player's reload button (`↺`), scrubs to the start, and plays it to completion. It also automatically revisits any earlier uncompleted videos in the track so 100% of lessons get credited.
+3. 🟢 **Multi-Vector Checkmark Detection:** Employs 3 independent detection vectors (Visual DOM/SVG inspection, Direct Coordinate `elementFromPoint` sampling, and React Fiber component state) to infallibly detect solid green completed checkmarks and skip them.
+4. ↺ **Auto-Replay from 0:00 & Track Revisit:** If an uncompleted video opened stuck at `-0:00` due to a GFG tracking glitch, the extension automatically resets it to `0:00`, clicks the player's reload button (`↺`), resets the playbar scrubber, and plays it to completion. It also automatically revisits earlier uncompleted videos in the track.
 
 ---
 
-## 🌟 What's New in v4.1
+## 🌟 What's New in v4.2
 
-- 🟢 **Solid vs. Hollow Tick Discrimination:** Uses mathematical RGB bounding (`r < 95, g >= 115, b < 105, g - r >= 35`) to exclusively identify filled dark-green checkmark circles while disregarding hollow green outlines and progress bars.
-- ↺ **Glitched End-Frame Auto-Reset:** When an uncredited video opens at `-0:00` (`video.currentTime >= duration - 3`), the extension resets `currentTime = 0`, triggers the player's native `↺` restart button, resets the playbar scrubber, and plays at 2.0x muted to earn the checkmark.
-- 🔙 **Track Revisit Engine:** Detects any earlier uncompleted videos in the track and navigates back to finish them before advancing to subsequent tracks.
-- ⏭️ **Direct Problem & Quiz Bypass:** Seamlessly skips `Go to Problems »` and Quizzes to advance straight to the Next Track.
+- 🎯 **Multi-Vector Checkmark Detection:** Completely redesigned tick detection using 3 independent fail-safes:
+  1. **Visual DOM & SVG Inspection:** Parses computed `backgroundColor`, `fill`, SVG attributes, and checks for green circle with white checkmark.
+  2. **Coordinate-Based Sampling (`elementFromPoint`):** Samples the exact topmost rendered element at the checkmark's physical screen coordinates (`right - 22px`, `height / 2`).
+  3. **React Fiber Component State:** Directly inspects React component tree props (`isCompleted: true`, `completed: true`) directly from memory without relying on DOM styling.
+- 🛑 **Anti-Replay Guard for Completed Videos:** Guaranteed that videos identified as completed will NEVER be replayed; they are skipped immediately.
+- ⏩ **Manual HUD Skip Button:** Added a one-click `⏩ Skip` button on the floating badge for instant manual advancement at any time.
 
 ## ✨ Features
 
