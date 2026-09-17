@@ -1,11 +1,14 @@
-{
+﻿{
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer",
-  "version": "4.2",
-  "description": "Multi-vector checkmark detection (DOM, SVG, ElementFromPoint, React Fiber), 2x speed, muted, glitched end-frame 0:00 auto-replay, track revisit, virtual desktop support.",
+  "version": "5.0.0",
+  "description": "Automatically advances GeeksforGeeks course videos at 2x speed muted, skipping completed lessons and quizzes.",
   "permissions": [
-    "activeTab",
-    "alarms"
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.geeksforgeeks.org/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -13,12 +16,12 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.geeksforgeeks.org/batch/*",
-        "https://geeksforgeeks.org/batch/*"
+        "*://*.geeksforgeeks.org/batch/*",
+        "*://geeksforgeeks.org/batch/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start",
-      "world": "MAIN"
+      "all_frames": true
     }
   ]
 }

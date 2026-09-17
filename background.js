@@ -1,24 +1,30 @@
-// GFG Course Auto-Advancer - Background Service Worker (Manifest V3)
-// Guarantees real-time execution in background tabs and across Windows virtual desktops
+﻿// GFG Course Auto-Advancer - Background Service Worker (v5.0)
+// Manages tab keep-alive, wake alarms, and background unthrottling
 
-function pingTabs() {
-  chrome.tabs.query({ url: "*://*.geeksforgeeks.org/batch/*" }, (tabs) => {
-    if (chrome.runtime.lastError || !tabs) return;
-    for (const tab of tabs) {
-      if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "HEARTBEAT" }).catch(() => {});
-      }
-    }
-  });
-}
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('[GFG Auto v5.0] Background Service Worker installed');
+  chrome.alarms.create('gfg_keep_alive', { periodInMinutes: 0.25 });
+});
 
-// Send 1-second pulse to wake up GFG content scripts
-setInterval(pingTabs, 1000);
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create('gfg_keep_alive', { periodInMinutes: 0.25 });
+});
 
-// Keep the service worker alive using chrome.alarms
-chrome.alarms.create("gfg_keepalive", { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "gfg_keepalive") {
-    pingTabs();
+  if (alarm.name === 'gfg_keep_alive') {
+    chrome.tabs.query({ url: '*://*.geeksforgeeks.org/batch/*' }, (tabs) => {
+      for (const tab of tabs) {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, { action: 'PULSE' }).catch(() => {});
+        }
+      }
+    });
   }
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.action === 'STATUS_PING') {
+    sendResponse({ status: 'OK', timestamp: Date.now() });
+  }
+  return true;
 });
