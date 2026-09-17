@@ -1,24 +1,25 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v4.0_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v4.1_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
 A lean, purpose-built browser automation extension for **GeeksforGeeks Batch Course** video tracks. Built from the ground up to do exactly 4 things with zero bloat:
 
-1. 💻 **Works in Background & Virtual Desktops:** Background Service Worker heartbeats and Web Worker timers keep the tab active without timer throttling or freezing when minimized or placed on another desktop.
+1. 💻 **Works in Background & Virtual Desktops:** Background Service Worker heartbeats and Web Worker timers keep the tab active without timer throttling or freezing when minimized or placed on another Windows desktop.
 2. ⚡ **Muted & 2.0x Speed:** Enforces 2.0x speed and muted autoplay so playback never pauses and doesn't make noise.
-3. 🟢 **Skips Already Completed Videos:** Accurately identifies videos marked with a solid green checkmark in the sidebar and skips ahead to the next video immediately.
-4. 🛡️ **Never Skips Uncompleted Videos:** Ensures every uncompleted video (or videos glitched/unmarked by GFG) is played completely from start to finish.
+3. 🟢 **Solid Green Tick Precision Detection:** Accurately distinguishes **solid dark-green checkmarks** (`#2f8d46` / `rgb(47, 141, 70)`) from **hollow light-green outline circles** and progress bars, immediately skipping videos that are truly completed.
+4. ↺ **Auto-Replay from 0:00 & Track Revisit:** If a video was previously watched but GFG glitched and opened it stuck at `-0:00` without awarding the tick, the extension automatically resets it to `0:00`, triggers the player's reload button (`↺`), scrubs to the start, and plays it to completion. It also automatically revisits any earlier uncompleted videos in the track so 100% of lessons get credited.
 
 ---
 
-## ✨ Features (v4.0 Clean Redesign)
+## 🌟 What's New in v4.1
 
-- 🔄 **Direct Native Next Navigation:** Prioritizes GFG's native `Next »` button above the player for reliable SPA page transitions.
-- ⏭️ **Auto-Advance to Next Track:** Automatically advances to the next track when all videos in the current track are done or when prompted with `Go to Problems »`.
-- 🎛️ **Minimal, Non-Intrusive HUD:** Clean status indicator that never blocks buttons or clicks.
+- 🟢 **Solid vs. Hollow Tick Discrimination:** Uses mathematical RGB bounding (`r < 95, g >= 115, b < 105, g - r >= 35`) to exclusively identify filled dark-green checkmark circles while disregarding hollow green outlines and progress bars.
+- ↺ **Glitched End-Frame Auto-Reset:** When an uncredited video opens at `-0:00` (`video.currentTime >= duration - 3`), the extension resets `currentTime = 0`, triggers the player's native `↺` restart button, resets the playbar scrubber, and plays at 2.0x muted to earn the checkmark.
+- 🔙 **Track Revisit Engine:** Detects any earlier uncompleted videos in the track and navigates back to finish them before advancing to subsequent tracks.
+- ⏭️ **Direct Problem & Quiz Bypass:** Seamlessly skips `Go to Problems »` and Quizzes to advance straight to the Next Track.
 
 ## ✨ Features
 
