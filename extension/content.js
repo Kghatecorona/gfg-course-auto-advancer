@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         GFG Course Auto-Advancer (v4.1 - Precision Replay & Revisit Engine)
+// @name         GFG Course Auto-Advancer (v4.1.1 - Precision Replay & Revisit Engine)
 // @namespace    https://geeksforgeeks.org/
-// @version      4.1
+// @version      4.1.1
 // @description  Automates GFG courses at 2x. Skips solid-green completed videos, replays glitched end-frame videos from 0:00, revisits uncompleted track videos, and runs across virtual desktops.
 // @author       Kavyansh
 // @match        https://*.geeksforgeeks.org/batch/*
@@ -16,7 +16,7 @@
   if (window.__gfg_auto_v41_active) return;
   window.__gfg_auto_v41_active = true;
 
-  console.log('%c[GFG Auto v4.1] Initializing Precision Replay & Revisit Engine...', 'color: #38bdf8; font-weight: bold;');
+  console.log('%c[GFG Auto v4.1.1] Initializing Precision Replay & Revisit Engine...', 'color: #38bdf8; font-weight: bold;');
 
   // ----------------------------------------------------------------------
   // 1. BACKGROUND TRACKING & VIRTUAL DESKTOP SPOOFS
@@ -85,37 +85,57 @@
       const r = parseInt(rgb[1], 10);
       const g = parseInt(rgb[2], 10);
       const b = parseInt(rgb[3], 10);
-      // Strict dark-green profile: r < 95, g >= 115, b < 105, g distinctly higher than r and b
-      // Solid tick is (47, 141, 70). Hollow tick border is (129, 186, 143) which fails r < 95 and b < 105.
+      // Solid tick is (47, 141, 70). Hollow outline is (129, 186, 143) which fails r < 95 and b < 105.
       return r < 95 && g >= 115 && b < 105 && (g - r) >= 35 && (g - b) >= 35;
     }
+
+    const hex = s.match(/#([0-9a-f]{6})/i);
+    if (hex) {
+      const r = parseInt(hex[1].substring(0, 2), 16);
+      const g = parseInt(hex[1].substring(2, 4), 16);
+      const b = parseInt(hex[1].substring(4, 6), 16);
+      return r < 95 && g >= 115 && b < 105 && (g - r) >= 35 && (g - b) >= 35;
+    }
+
     return false;
   }
 
   function isRowSolidCompleted(rowElement) {
     if (!rowElement) return false;
     const rowRect = rowElement.getBoundingClientRect();
-    const nodes = [rowElement, ...Array.from(rowElement.querySelectorAll('svg, path, circle, i, span, div'))];
+    const nodes = [rowElement, ...Array.from(rowElement.querySelectorAll('svg, path, circle, rect, g, i, span, div'))];
 
     for (const node of nodes) {
       try {
         const rect = node.getBoundingClientRect();
-        // The checkmark circle is on the right side of the row, approx 10-34px in size
-        if (rect.width >= 10 && rect.width <= 34 && rect.height >= 10 && rect.height <= 34) {
+        // Check elements around 8px to 38px
+        if (rect.width >= 8 && rect.width <= 38 && rect.height >= 8 && rect.height <= 38) {
+          // Checkmark circle is always on the right half of the row
           if (rowRect.width > 0 && rect.right < rowRect.left + rowRect.width * 0.5) {
-            continue; // Ignore left-aligned elements like play icons or index badges
+            continue; // Skip left-aligned play icons or numbers
           }
           const style = window.getComputedStyle(node);
-          // Only solid green background or SVG fill indicates genuine completed state
           if (isSolidDarkGreen(style.backgroundColor) || isSolidDarkGreen(style.fill)) {
             return true;
           }
-          const fillAttr = node.getAttribute?.('fill') || '';
-          if (isSolidDarkGreen(fillAttr)) {
-            return true;
+          // If SVG circle/path uses fill=currentColor
+          if (style.fill === 'currentColor' || node.tagName.toLowerCase() === 'circle') {
+            if (isSolidDarkGreen(style.color)) return true;
           }
         }
       } catch (e) {}
+
+      // Check fill attribute on SVGs/paths/circles
+      const fillAttr = node.getAttribute?.('fill') || '';
+      if (isSolidDarkGreen(fillAttr)) {
+        try {
+          const rect = node.getBoundingClientRect();
+          if (rowRect.width > 0 && rect.right > 0 && rect.right < rowRect.left + rowRect.width * 0.5) {
+            continue;
+          }
+        } catch (e) {}
+        return true;
+      }
     }
     return false;
   }
@@ -123,60 +143,96 @@
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
     const maxSidebarX = Math.max(400, window.innerWidth * 0.48);
-    const durationNodes = all.filter(el => {
+
+    // 1. Find leaf nodes containing "Duration:" in sidebar
+    const leafDurationNodes = all.filter(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || r.left > maxSidebarX) return false;
       const txt = (el.innerText || el.textContent || '').trim();
-      return txt.startsWith('Duration:') || /Duration:\s*\d+/i.test(txt);
+      if (!txt.includes('Duration:')) return false;
+      // Must be a leaf node for "Duration:" (none of its children contain "Duration:")
+      return !Array.from(el.children).some(child => 
+        (child.innerText || child.textContent || '').includes('Duration:')
+      );
     });
 
+    const leafSet = new Set(leafDurationNodes);
     const rows = [];
-    for (const dNode of durationNodes) {
-      let row = dNode;
+
+    for (const leaf of leafDurationNodes) {
+      let row = leaf;
       while (row && row.parentElement && row.parentElement !== document.body) {
         const parent = row.parentElement;
-        const count = Array.from(parent.querySelectorAll('*')).filter(e => {
-          const t = (e.innerText || e.textContent || '').trim();
-          return t.startsWith('Duration:') || /Duration:\s*\d+/i.test(t);
-        }).length;
-        if (count > 1) break;
+        // Count how many leaf duration nodes are descendants of parent
+        const children = parent.querySelectorAll('*');
+        let leafCount = 0;
+        for (const c of children) {
+          if (leafSet.has(c)) leafCount++;
+        }
+        // When parent contains more than 1 video leaf, row is the full video item card!
+        if (leafCount > 1) break;
         row = parent;
       }
       if (row && !rows.includes(row)) {
         rows.push(row);
       }
     }
+
+    // Fallback if leaf detection didn't find rows
+    if (rows.length === 0) {
+      const fallbackRows = Array.from(document.querySelectorAll('a[href*="/video/"], div[class*="video-item"], div[class*="track-item"]')).filter(el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && r.left < maxSidebarX;
+      });
+      return fallbackRows;
+    }
+
     return rows;
   }
 
   function isCurrentVideoRow(row) {
     if (!row) return false;
 
-    // 1. URL / href match (most accurate)
-    const currentPath = location.pathname.toLowerCase();
+    // 1. URL / href match (decoded & raw)
+    const curPath = location.pathname.toLowerCase();
+    const decCurPath = decodeURIComponent(curPath);
     const a = row.tagName === 'A' ? row : row.querySelector('a');
     if (a && a.getAttribute('href')) {
-      const href = a.getAttribute('href').toLowerCase();
-      if (href === currentPath || href === location.href.toLowerCase() || (currentPath.length > 5 && href.includes(currentPath))) {
+      const rawHref = (a.getAttribute('href') || '').toLowerCase();
+      const decHref = decodeURIComponent(rawHref);
+      if (rawHref.includes(curPath) || curPath.includes(rawHref) || 
+          decHref.includes(decCurPath) || decCurPath.includes(decHref)) {
         return true;
       }
-      const vidMatch = location.pathname.match(/\/video\/([^\/]+)/i);
-      if (vidMatch && href.includes(vidMatch[1].toLowerCase())) {
-        return true;
+      const vidMatch = curPath.match(/\/video\/([^\/?#]+)/i);
+      if (vidMatch && vidMatch[1]) {
+        const vidId = vidMatch[1].toLowerCase();
+        const decVidId = decodeURIComponent(vidId);
+        if (rawHref.includes(vidId) || rawHref.includes(decVidId) || 
+            decHref.includes(vidId) || decHref.includes(decVidId)) {
+          return true;
+        }
       }
     }
 
     // 2. Class / attribute match
     const cls = (typeof row.className === 'string' ? row.className : (row.className?.baseVal || '')).toLowerCase();
-    if (cls.includes('active') || cls.includes('selected')) return true;
+    if (cls.includes('active') || cls.includes('selected') || cls.includes('highlight')) return true;
     if (row.querySelector('.active, [aria-current="page"], [aria-selected="true"]')) return true;
 
-    // 3. Title match
-    const mainHeading = document.querySelector('h1, h2, div[class*="video-title"], div[class*="title"]');
-    const mainTitle = (mainHeading ? mainHeading.textContent : '').trim().toLowerCase();
-    if (mainTitle.length > 3) {
-      const rowText = (row.innerText || row.textContent || '').toLowerCase();
-      if (rowText.includes(mainTitle)) return true;
+    // 3. Title match (against heading above video player)
+    const headings = Array.from(document.querySelectorAll('h1, h2, h3, div[class*="title"], div[class*="header"]'));
+    const video = document.querySelector('video');
+    const vTop = video ? video.getBoundingClientRect().top : 500;
+    for (const h of headings) {
+      const hr = h.getBoundingClientRect();
+      if (hr.width > 50 && hr.height > 15 && hr.bottom <= vTop + 30 && hr.left > 280) {
+        const hText = (h.innerText || h.textContent || '').trim().toLowerCase();
+        if (hText.length > 5 && !hText.includes('next') && !hText.includes('prev')) {
+          const rowText = (row.innerText || row.textContent || '').toLowerCase();
+          if (rowText.includes(hText)) return true;
+        }
+      }
     }
 
     return false;
@@ -206,7 +262,6 @@
   // 3. REPLAY FROM BEGINNING (0:00) FOR GLITCHED END-FRAME VIDEOS
   // ----------------------------------------------------------------------
   function clickPlayerRestartButton() {
-    // Check buttons with restart / replay labels or icons
     const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], i, svg'));
     for (const el of buttons) {
       const btn = el.closest('button, div[role="button"], a') || el;
@@ -218,7 +273,6 @@
       }
     }
 
-    // Video Player control bar leftmost button (Reload icon ↺)
     const video = document.querySelector('video');
     if (video) {
       const playerContainer = video.closest('.video-js, [class*="player"], [class*="video"]') || video.parentElement;
@@ -240,7 +294,6 @@
     if (!video) return;
     const playerContainer = video.closest('.video-js, [class*="player"], [class*="video"]') || document.body;
 
-    // Check input[type="range"]
     const range = playerContainer.querySelector('input[type="range"]');
     if (range) {
       try {
@@ -250,7 +303,6 @@
       } catch (e) {}
     }
 
-    // Check custom progress bars / sliders
     const progressBars = Array.from(playerContainer.querySelectorAll('[class*="progress"], [class*="slider"], [role="slider"]'));
     for (const pb of progressBars) {
       const r = pb.getBoundingClientRect();
@@ -298,16 +350,16 @@
 
   function advanceToNext() {
     const now = Date.now();
-    if (now - lastAdvanceTime < 2500) return; // 2.5s cooldown to prevent double advancement
+    if (now - lastAdvanceTime < 2500) return; // 2.5s cooldown
     lastAdvanceTime = now;
 
     updateHUD('Advancing to next video...', '#38bdf8');
 
-    // 1. Revisit check: If an earlier video in the track has a hollow tick, revisit it!
     const uncompleted = findFirstUncompletedVideoRow();
     const allRows = getSidebarVideoRows();
     const currentIdx = allRows.findIndex(r => isCurrentVideoRow(r));
 
+    // 1. Revisit check: If an earlier video in the track has a hollow tick, revisit it!
     if (uncompleted && currentIdx !== -1) {
       const uncompletedIdx = allRows.indexOf(uncompleted);
       if (uncompletedIdx < currentIdx) {
@@ -318,7 +370,15 @@
       }
     }
 
-    // 2. Normal progression: Click Top-Right Next » button
+    // 2. Direct Jump: If an uncompleted video is ahead, navigate directly to it!
+    if (uncompleted && !isCurrentVideoRow(uncompleted)) {
+      console.log('[GFG Auto] Navigating directly to next uncompleted row:', uncompleted);
+      updateHUD('⏭️ Jumping to uncompleted video...', '#38bdf8');
+      navigateToRow(uncompleted);
+      return;
+    }
+
+    // 3. Normal progression: Click Top-Right Next » button
     const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"], div, span'));
     const topNext = allInteractive.find(el => {
       const r = el.getBoundingClientRect();
@@ -335,7 +395,7 @@
       return;
     }
 
-    // 3. Skip Problems & Quizzes -> Advance to Next Track
+    // 4. Skip Problems & Quizzes -> Advance to Next Track
     const nextTrack = allInteractive.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
@@ -350,23 +410,30 @@
       return;
     }
 
-    // 4. Fallback: If an uncompleted row exists ahead, navigate directly to it
-    if (uncompleted && !isCurrentVideoRow(uncompleted)) {
-      console.log('[GFG Auto] Navigating to next uncompleted row:', uncompleted);
-      navigateToRow(uncompleted);
-      return;
-    }
-
     updateHUD('End of track or next target not found.', '#f59e0b');
   }
 
   function navigateToRow(row) {
     if (!row) return false;
+
+    // Scroll into view first
+    try {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {}
+
     const a = row.tagName === 'A' ? row : row.querySelector('a');
     if (a && a.href && !a.href.startsWith('javascript:')) {
-      a.click();
-      if (location.href !== a.href) {
-        window.location.href = a.href;
+      const destUrl = a.href;
+      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(t => {
+        try { a.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })); } catch (e) {}
+      });
+      try { a.click(); } catch (e) {}
+      if (location.href !== destUrl) {
+        setTimeout(() => {
+          if (location.href !== destUrl) {
+            window.location.href = destUrl;
+          }
+        }, 800);
       }
       return true;
     }
@@ -403,7 +470,7 @@
         if (location.href === initialUrl && destUrl !== location.href) {
           window.location.href = destUrl;
         }
-      }, 1500);
+      }, 1200);
     }
   }
 
@@ -457,6 +524,7 @@
     if (location.href !== currentUrl) {
       currentUrl = location.href;
       pageLoadCooldownUntil = Date.now() + 1500;
+      lastAdvanceTime = 0;
       checkedVideoKey = '';
       hasCheckedInitialEndFrame = false;
       updateHUD('Loading new video...', '#38bdf8');
@@ -569,5 +637,5 @@
 
   setInterval(tick, 1000);
 
-  console.log('%c[GFG Auto v4.1] Precision Replay & Revisit Engine Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
+  console.log('%c[GFG Auto v4.1.1] Precision Replay & Revisit Engine Active!', 'color: #22c55e; font-size: 13px; font-weight: bold;');
 })();
