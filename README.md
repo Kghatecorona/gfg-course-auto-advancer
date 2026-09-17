@@ -1,11 +1,20 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.5_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v3.6_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
 A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, skips already watched videos, problems, and quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
+
+---
+
+## ✨ What's New in v3.6
+
+- 🎯 **Fixed Video Progression Stall (Native Next » Priority):** Eliminated the sidebar row click interceptor that failed to trigger React navigation and froze the HUD on `Video finished! Waiting 1s for server credit...`. Playback advancement now exclusively and reliably triggers GFG's official `Next »` button above the player.
+- 🔊 **Audio-Clock Background Keep-Alive (Virtual Desktop Fix):** Integrated an inaudible Web Audio API `AudioContext` keep-alive stream driven by the OS hardware audio clock. This permanently exempts the tab from Chrome's background tab freezing, window occlusion discarding, and 1-minute timer throttling across Windows virtual desktops!
+- 🟢 **Strict Solid Dark-Green Checkmark Detection:** Fixed false positives where unwatched lessons with green outline borders were misidentified as completed. It now strictly checks for filled solid green circle backgrounds (`#2f8d46` / `#308e47`).
+- ⏭️ **Intelligent Next Track Transition:** Skips `Go to Problems »` and quizzes, seamlessly clicking `>> Next Track` to keep multi-track video playlists playing back-to-back.
 
 ---
 
