@@ -1,11 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "GFG Course Auto-Advancer (2x Speed + Auto Next)",
-  "version": "3.6",
-  "description": "Plays GFG courses at 2x, advances via native Next button, skips problems/quizzes, and runs across Windows virtual desktops via Audio-Clock keepalive.",
+  "name": "GFG Course Auto-Advancer",
+  "version": "4.0",
+  "description": "Clean, lightweight GFG video automation: 2x speed, muted, auto-skips completed videos, plays uncompleted videos, runs in background/virtual desktops.",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [

@@ -1,42 +1,24 @@
 # 🚀 GFG Course Auto-Advancer
 
-[![Version](https://img.shields.io/badge/Version-v3.6_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
+[![Version](https://img.shields.io/badge/Version-v4.0_Released-success.svg?style=flat-square)](https://github.com/Kghatecorona/gfg-course-auto-advancer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Manifest V3](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-blue.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla_JS-F7DF1E.svg?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-A lightweight browser automation tool for **GeeksforGeeks Batch Course** video tracks. It locks playback to **2.0x speed**, autoplays subsequent videos, grants a credit buffer, skips already watched videos, problems, and quizzes, and advances videos continuously even in **background tabs, minimized windows, or other Windows virtual desktops**.
+A lean, purpose-built browser automation extension for **GeeksforGeeks Batch Course** video tracks. Built from the ground up to do exactly 4 things with zero bloat:
+
+1. 💻 **Works in Background & Virtual Desktops:** Background Service Worker heartbeats and Web Worker timers keep the tab active without timer throttling or freezing when minimized or placed on another desktop.
+2. ⚡ **Muted & 2.0x Speed:** Enforces 2.0x speed and muted autoplay so playback never pauses and doesn't make noise.
+3. 🟢 **Skips Already Completed Videos:** Accurately identifies videos marked with a solid green checkmark in the sidebar and skips ahead to the next video immediately.
+4. 🛡️ **Never Skips Uncompleted Videos:** Ensures every uncompleted video (or videos glitched/unmarked by GFG) is played completely from start to finish.
 
 ---
 
-## ✨ What's New in v3.6
+## ✨ Features (v4.0 Clean Redesign)
 
-- 🎯 **Fixed Video Progression Stall (Native Next » Priority):** Eliminated the sidebar row click interceptor that failed to trigger React navigation and froze the HUD on `Video finished! Waiting 1s for server credit...`. Playback advancement now exclusively and reliably triggers GFG's official `Next »` button above the player.
-- 🔊 **Audio-Clock Background Keep-Alive (Virtual Desktop Fix):** Integrated an inaudible Web Audio API `AudioContext` keep-alive stream driven by the OS hardware audio clock. This permanently exempts the tab from Chrome's background tab freezing, window occlusion discarding, and 1-minute timer throttling across Windows virtual desktops!
-- 🟢 **Strict Solid Dark-Green Checkmark Detection:** Fixed false positives where unwatched lessons with green outline borders were misidentified as completed. It now strictly checks for filled solid green circle backgrounds (`#2f8d46` / `#308e47`).
-- ⏭️ **Intelligent Next Track Transition:** Skips `Go to Problems »` and quizzes, seamlessly clicking `>> Next Track` to keep multi-track video playlists playing back-to-back.
-
----
-
-## ✨ What's New in v3.5
-
-- ⏭️ **Auto-Advance to Next Track (Skips Problems & Quizzes):** When all videos in a track reach 100% completion or when GFG prompts `Go to Problems »`, the extension automatically clicks the `>> Next Track` button at the bottom of the sidebar, skipping coding problems and quizzes to keep video playback uninterrupted across course modules.
-- 🛑 **Cooldown Auto-Expiry Fix:** Eliminated permanent stalls on `Preparing video playback...` by replacing static state locks with strict 4-second timestamp cooldowns that auto-reset.
-- 🔍 **Unticked Video Fast-Seek:** Scans sidebar video rows and immediately jumps to the first unwatched (unticked) video if playback hasn't started.
-- 🛡️ **Quiz & Practice Auto-Bypass:** Safely detects `/quiz/`, `/problem/`, and `/practice/` pages and advances directly to the next track within 2 seconds.
-
----
-
-## ✨ What's New in v3.4
-
-- 🔄 **Fixed Infinite Page Reload Loop:** Resolved the issue where fallback navigation triggered `window.location.href = location.href`, causing the page to reload every 3 seconds. Fallbacks now strictly require `destUrl !== location.href`.
-- ⏩ **Native GFG `Next »` Button Integration:** Directly triggers GeeksforGeeks' official `Next »` button above the video player, ensuring smooth SPA transitions through the track to reach unwatched videos like *Sieve of Eratosthenes*.
-- ⏱️ **0:00 False End-Frame Elimination:** Added strict `currentTime > 5s` guard to prevent newly loaded videos at 0:00 from falsely triggering completion logic.
-- 🟢 **Solid Dark-Green Checkmark Skip:** Automatically clicks `Next »` through previously watched videos until an uncompleted video is reached.
-- 🏠 **Batch Home Scope:** Remains in `Standby` on overview pages.
-- ⏩ **Manual Skip Control:** Instant `⏩ Skip` button in the floating HUD.
-
----
+- 🔄 **Direct Native Next Navigation:** Prioritizes GFG's native `Next »` button above the player for reliable SPA page transitions.
+- ⏭️ **Auto-Advance to Next Track:** Automatically advances to the next track when all videos in the current track are done or when prompted with `Go to Problems »`.
+- 🎛️ **Minimal, Non-Intrusive HUD:** Clean status indicator that never blocks buttons or clicks.
 
 ## ✨ Features
 
