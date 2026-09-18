@@ -1,28 +1,27 @@
 // ======================================================================
-// GFG Course Auto-Advancer - Main World Execution Script (v5.6.0)
+// GFG Course Auto-Advancer - Main World Execution Script (v5.7.0)
 // Runs directly in the webpage context (world: "MAIN")
-// Strict Dark Green Tick Verification Engine:
-// 1. NEVER assumes a video is complete just because playback finished
-// 2. Waits for GFG's authoritative dark green tick (solid #2F8D46 circle + white checkmark)
-// 3. Advances ONLY when solid dark green tick is confirmed
-// 4. If green tick is not granted within 8s, rewinds and replays to fulfill watch-time
-// 5. Forces lowest quality (240p / 360p / Lowest Available)
-// 6. Web Audio continuous silent keep-alive (zero background throttling)
-// 7. Client-side SPA navigation & unpause watchdog
+// Full Background Execution & Strict Green-Tick Engine:
+// 1. Strict dark green tick verification (solid #2F8D46 circle + white checkmark)
+// 2. Progression Stall Watchdog: actively detects if currentTime freezes and unjams it
+// 3. Audio hardware clock unthrottler: keeps media pipeline running in background
+// 4. MediaSession active state lock: prevents background OS suspension
+// 5. Waits for GFG's dark green tick; replays from 0:00 if not granted within 8s
+// 6. Forces lowest quality (240p / Lowest Available)
 // ======================================================================
 
 (function () {
   'use strict';
 
-  if (window.__GFG_AUTO_MAIN_V56__) return;
-  window.__GFG_AUTO_MAIN_V56__ = true;
+  if (window.__GFG_AUTO_MAIN_V57__) return;
+  window.__GFG_AUTO_MAIN_V57__ = true;
 
-  console.log('%c[GFG Auto v5.6.0] Strict Green-Tick Verification Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
+  console.log('%c[GFG Auto v5.7.0] Background Immunity & Strict Green-Tick Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
 
   const TARGET_SPEED = 2.0;
 
   // ====================================================================
-  // 1. WEB AUDIO KEEP-ALIVE OSCILLATOR (ANTI-BACKGROUND THROTTLE)
+  // 1. AUDIO HARDWARE CLOCK & SILENT KEEP-ALIVE
   // ====================================================================
   let audioWakeCtx = null;
   function ensureAudioWakeLock() {
@@ -33,7 +32,8 @@
         audioWakeCtx = new AudioCtx();
         const osc = audioWakeCtx.createOscillator();
         const gain = audioWakeCtx.createGain();
-        gain.gain.value = 0.0001;
+        gain.gain.value = 0.001; // perceptible to Chromium AudioSilenceDetector
+        osc.frequency.value = 40; // very low frequency
         osc.connect(gain);
         gain.connect(audioWakeCtx.destination);
         osc.start();
@@ -47,7 +47,27 @@
   setInterval(ensureAudioWakeLock, 2000);
 
   // ====================================================================
-  // 2. VISIBILITY & FOCUS SPOOFING
+  // 2. MEDIASESSION ACTIVE PLAYBACK LOCK
+  // ====================================================================
+  function lockMediaSession() {
+    try {
+      if (window.navigator?.mediaSession) {
+        navigator.mediaSession.playbackState = 'playing';
+        navigator.mediaSession.setActionHandler('play', () => {
+          const v = document.querySelector('video');
+          if (v) origPlay.call(v).catch(() => {});
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          console.log('[GFG Auto v5.7] MediaSession pause intercepted');
+        });
+      }
+    } catch (e) {}
+  }
+  lockMediaSession();
+  setInterval(lockMediaSession, 3000);
+
+  // ====================================================================
+  // 3. VISIBILITY & FOCUS SPOOFING
   // ====================================================================
   try {
     Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
@@ -80,7 +100,7 @@
   });
 
   // ====================================================================
-  // 3. INTERSECTION OBSERVER PATCH
+  // 4. INTERSECTION OBSERVER PATCH
   // ====================================================================
   try {
     const NativeIntersectionObserver = window.IntersectionObserver;
@@ -104,7 +124,7 @@
   } catch (e) {}
 
   // ====================================================================
-  // 4. USER ACTIVATION SPOOFING
+  // 5. USER ACTIVATION SPOOFING
   // ====================================================================
   try {
     if (window.Navigator && Navigator.prototype) {
@@ -118,7 +138,7 @@
   } catch (e) {}
 
   // ====================================================================
-  // 5. REQUEST ANIMATION FRAME BACKGROUND FALLBACK
+  // 6. REQUEST ANIMATION FRAME BACKGROUND FALLBACK
   // ====================================================================
   try {
     const nativeRAF = window.requestAnimationFrame;
@@ -133,16 +153,16 @@
   } catch (e) {}
 
   // ====================================================================
-  // 6. HTMLMEDIAELEMENT HOOKS (GUARANTEED 2.0x, MUTED AUTOPLAY, ANTI-PAUSE)
+  // 7. HTMLMEDIAELEMENT HOOKS (GUARANTEED 2.0x, MUTED/AUDIBLE AUTOPLAY)
   // ====================================================================
   const origPlay = HTMLMediaElement.prototype.play;
   const origPause = HTMLMediaElement.prototype.pause;
 
   HTMLMediaElement.prototype.play = function () {
-    this.muted = true;
-    this.defaultMuted = true;
-    this.volume = 0;
     this.playbackRate = TARGET_SPEED;
+    if (!this.muted && this.volume > 0.05) {
+      this.volume = 0.01;
+    }
     return origPlay.apply(this, arguments);
   };
 
@@ -150,11 +170,11 @@
     if (this.ended || (this.duration && this.currentTime >= this.duration - 0.5)) {
       return origPause.apply(this, arguments);
     }
-    console.log('[GFG Auto v5.6] Background pause attempt intercepted.');
+    console.log('[GFG Auto v5.7] Background pause attempt intercepted.');
   };
 
   // ====================================================================
-  // 7. LOWEST VIDEO QUALITY ENFORCEMENT (240p / Lowest Available)
+  // 8. LOWEST VIDEO QUALITY ENFORCEMENT (240p / Lowest Available)
   // ====================================================================
   let lastQualityCheckTime = 0;
   function enforceLowestQuality() {
@@ -224,11 +244,11 @@
   }
 
   // ====================================================================
-  // 8. FLOATING HUD (TOP-RIGHT DOCKED)
+  // 9. FLOATING HUD (TOP-RIGHT DOCKED)
   // ====================================================================
   let hudContainer = null;
   let isMinimized = localStorage.getItem('gfg_hud_minimized') === 'true';
-  let hudStatusMessage = 'Active (2.0x Muted • 240p)';
+  let hudStatusMessage = 'Active (2.0x • 240p)';
   let hudStatusColor = '#22c55e';
 
   function updateHUDStatus(msg, color = '#22c55e') {
@@ -278,7 +298,7 @@
     }
 
     if (isMinimized) {
-      hudContainer.innerHTML = '<div id="gfg-hud-header" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1.5px solid #22c55e; border-radius: 9999px; padding: 7px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; cursor: move; color: #f8fafc; font-size: 12px; font-weight: 600;"><span style="width: 8px; height: 8px; border-radius: 50%; background: ' + hudStatusColor + '; display: inline-block;"></span><span>GFG Auto 2.0x</span><button id="gfg-hud-expand-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;" title="Expand panel">⤢</button></div>';
+      hudContainer.innerHTML = '<div id="gfg-hud-header" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1.5px solid #22c55e; border-radius: 9999px; padding: 7px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; cursor: move; color: #f8fafc; font-size: 12px; font-weight: 600;"><span style="width: 8px; height: 8px; border-radius: 50%; background: ' + hudStatusColor + '; display: inline-block;"></span><span>GFG Auto v5.7</span><button id="gfg-hud-expand-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;" title="Expand panel">⤢</button></div>';
       const expandBtn = document.getElementById('gfg-hud-expand-btn');
       if (expandBtn) {
         expandBtn.onclick = (e) => {
@@ -309,7 +329,7 @@
         <div id="gfg-hud-header" style="display: flex; align-items: center; justify-content: space-between; cursor: move; border-bottom: 1px solid rgba(148, 163, 184, 0.15); padding-bottom: 6px;">
           <div style="display: flex; align-items: center; gap: 7px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
-            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.6</span>
+            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.7</span>
           </div>
           <button id="gfg-hud-min-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;" title="Minimize panel">_</button>
         </div>
@@ -360,10 +380,7 @@
   }
 
   // ====================================================================
-  // 9. AUTHORITATIVE SOLID DARK GREEN TICK DETECTION
-  // Differentiates with 100% precision:
-  // - SOLID DARK GREEN TICK: fill="#2F8D46" circle AND stroke="white" path
-  // - HOLLOW CIRCLE (INCOMPLETE): stroke="#2F8D46" with NO fill and NO white path
+  // 10. AUTHORITATIVE SOLID DARK GREEN TICK DETECTION
   // ====================================================================
   function isRowCompleted(row) {
     if (!row) return false;
@@ -388,7 +405,7 @@
       }
     }
 
-    // 2. Image src inspection (Group11(1) = complete, Group11 = incomplete)
+    // 2. Image src inspection
     const imgs = row.querySelectorAll('img');
     for (const img of imgs) {
       const src = (img.getAttribute('src') || img.src || '').toLowerCase();
@@ -442,7 +459,7 @@
   }
 
   // ====================================================================
-  // 10. SIDEBAR ROW TARGETING
+  // 11. SIDEBAR ROW TARGETING
   // ====================================================================
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
@@ -541,7 +558,7 @@
 
   function replayVideoFromBeginning(video) {
     if (!video) return;
-    console.log('[GFG Auto v5.6] Resetting to 0:00 to satisfy watch-time...');
+    console.log('[GFG Auto v5.7] Resetting to 0:00 to satisfy watch-time...');
     try { video.currentTime = 0; } catch (e) {}
     try {
       video.dispatchEvent(new Event('seeking'));
@@ -549,13 +566,12 @@
       video.dispatchEvent(new Event('timeupdate'));
     } catch (e) {}
 
-    video.muted = true;
     video.playbackRate = TARGET_SPEED;
     origPlay.call(video).catch(() => {});
   }
 
   // ====================================================================
-  // 11. ADVANCER (NAVIGATES ONLY TO UNCOMPLETED TARGETS)
+  // 12. ADVANCER (NAVIGATES ONLY TO UNCOMPLETED TARGETS)
   // ====================================================================
   let lastAdvanceTime = 0;
 
@@ -564,24 +580,24 @@
     if (now - lastAdvanceTime < 2500) return;
     lastAdvanceTime = now;
 
-    console.log('[GFG Auto v5.6] Searching for next uncompleted lesson...');
+    console.log('[GFG Auto v5.7] Searching for next uncompleted lesson...');
 
     // 1. Find first uncompleted video in the sidebar
     const uncompleted = findFirstUncompletedVideoRow();
     if (uncompleted) {
       if (!isCurrentVideoRow(uncompleted)) {
-        console.log('[GFG Auto v5.6] Advancing to uncompleted lesson:', uncompleted);
+        console.log('[GFG Auto v5.7] Advancing to uncompleted lesson:', uncompleted);
         updateHUDStatus('Advancing to next uncompleted lesson...', '#22c55e');
         navigateToRow(uncompleted);
         return;
       } else {
-        console.log('[GFG Auto v5.6] Current lesson is still uncompleted.');
+        console.log('[GFG Auto v5.7] Current lesson is still uncompleted.');
         return;
       }
     }
 
     // 2. All videos in current track have solid green ticks! Advance to Next Track
-    console.log('[GFG Auto v5.6] All videos in this track confirmed complete! Advancing to Next Track...');
+    console.log('[GFG Auto v5.7] All videos in this track confirmed complete! Advancing to Next Track...');
     updateHUDStatus('Track Complete! Advancing to Next Track...', '#22c55e');
 
     const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
@@ -593,7 +609,7 @@
     });
 
     if (topNext) {
-      console.log('[GFG Auto v5.6] Advancing via Next » button:', topNext);
+      console.log('[GFG Auto v5.7] Advancing via Next » button:', topNext);
       clickOrNavigate(topNext);
       return;
     }
@@ -606,7 +622,7 @@
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.6] Advancing to Next Track:', nextTrackBtn);
+      console.log('[GFG Auto v5.7] Advancing to Next Track:', nextTrackBtn);
       clickOrNavigate(nextTrackBtn);
       return;
     }
@@ -615,7 +631,7 @@
   }
 
   function bypassQuizzesAndProblems() {
-    console.log('[GFG Auto v5.6] Bypassing non-video module...');
+    console.log('[GFG Auto v5.7] Bypassing non-video module...');
     updateHUDStatus('Bypassing Quiz / Problem...', '#eab308');
 
     const allTrackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
@@ -631,7 +647,7 @@
         continue;
       }
       if (foundCurrentTrack && !href.includes(curTrackSlug)) {
-        console.log('[GFG Auto v5.6] Advancing to next track link:', a);
+        console.log('[GFG Auto v5.7] Advancing to next track link:', a);
         clickOrNavigate(a);
         return;
       }
@@ -694,31 +710,81 @@
   }
 
   // ====================================================================
-  // 12. CORE AUTOMATION CONTROLLER LOOP
+  // 13. PLAYBACK PROGRESSION STALLING WATCHDOG (BACKGROUND UNJAMMER)
+  // ====================================================================
+  let lastCurTime = -1;
+  let lastCurTimeUpdate = Date.now();
+  let stallCount = 0;
+
+  function runProgressionWatchdog(video) {
+    if (!video || video.ended || !video.duration || video.duration <= 0) return;
+
+    const cur = video.currentTime;
+    const now = Date.now();
+
+    // If currentTime is progressing normally
+    if (Math.abs(cur - lastCurTime) > 0.15) {
+      lastCurTime = cur;
+      lastCurTimeUpdate = now;
+      stallCount = 0;
+      return;
+    }
+
+    // Video currentTime is frozen!
+    const elapsedStalled = (now - lastCurTimeUpdate) / 1000;
+    if (elapsedStalled >= 2.5) {
+      stallCount++;
+      console.warn(`[GFG Auto v5.7] Playback stall detected at ${cur.toFixed(1)}s (stalled for ${elapsedStalled.toFixed(1)}s, kick #${stallCount})`);
+      updateHUDStatus(`⚡ Unjamming stall at ${cur.toFixed(0)}s...`, '#eab308');
+
+      // Unpause and force rate
+      video.playbackRate = TARGET_SPEED;
+      origPlay.call(video).catch(() => {});
+
+      // Buffer Kick: micro-seek forward to jump past any dead MediaSource segment
+      if (elapsedStalled >= 4.0 && cur < video.duration - 1.0) {
+        try {
+          video.currentTime = cur + 0.1;
+          video.dispatchEvent(new Event('seeking'));
+          video.dispatchEvent(new Event('seeked'));
+          video.dispatchEvent(new Event('timeupdate'));
+        } catch (e) {}
+        lastCurTimeUpdate = now - 2000; // allow 2s before next nudge
+      }
+
+      // If stall persists for > 8s, attempt clicking player or big play button
+      if (elapsedStalled >= 8.0) {
+        try {
+          const playBtn = document.querySelector('.vjs-play-control, .vjs-big-play-button, button[title*="play" i]');
+          if (playBtn) playBtn.click();
+        } catch (e) {}
+        origPlay.call(video).catch(() => {});
+      }
+    }
+  }
+
+  // ====================================================================
+  // 14. CORE AUTOMATION CONTROLLER LOOP
   // ====================================================================
   let currentUrl = location.href;
   let pageLoadCooldownUntil = 0;
-  let checkedVideoKey = '';
-  let hasCheckedInitialEndFrame = false;
   let completionWaitStartTime = 0;
-  let lastCurTime = -1;
-  let lastCurTimeUpdate = Date.now();
 
   function tick() {
     renderHUD();
     enforceLowestQuality();
+    lockMediaSession();
 
     // 1. Detect URL changes
     if (location.href !== currentUrl) {
       currentUrl = location.href;
       pageLoadCooldownUntil = Date.now() + 1500;
       lastAdvanceTime = 0;
-      checkedVideoKey = '';
-      hasCheckedInitialEndFrame = false;
       completionWaitStartTime = 0;
       lastCurTime = -1;
       lastCurTimeUpdate = Date.now();
-      console.log('[GFG Auto v5.6] URL changed:', currentUrl);
+      stallCount = 0;
+      console.log('[GFG Auto v5.7] URL changed:', currentUrl);
       updateHUDStatus('Loading new video...', '#22c55e');
       return;
     }
@@ -749,7 +815,7 @@
       }
     }
 
-    // 5. Video Player Management (2.0x, Muted Autoplay, Anti-Pause)
+    // 5. Video Player Management (2.0x, Autoplay, Anti-Pause, Progression Watchdog)
     const video = document.querySelector('video');
     if (!video) {
       const bodyText = (document.body?.innerText || '').toLowerCase();
@@ -760,6 +826,9 @@
       }
       return;
     }
+
+    // Run Progression Stall Watchdog on video
+    runProgressionWatchdog(video);
 
     // Attach pause-prevention and rate-lock listener to video directly
     if (!video.__gfg_listeners_set__) {
@@ -773,10 +842,18 @@
 
       video.addEventListener('pause', () => {
         if (!video.ended && video.currentTime < (video.duration - 0.5)) {
-          video.muted = true;
           video.playbackRate = TARGET_SPEED;
           origPlay.call(video).catch(() => {});
         }
+      });
+
+      video.addEventListener('waiting', () => {
+        console.log('[GFG Auto v5.7] Video waiting event - buffer underflow');
+      });
+
+      video.addEventListener('stalled', () => {
+        console.log('[GFG Auto v5.7] Video stalled event - nudging playback');
+        origPlay.call(video).catch(() => {});
       });
     }
 
@@ -786,12 +863,9 @@
       try { bigPlay.click(); } catch (e) {}
     }
 
-    // Ensure 2.0x and muted are locked
+    // Ensure 2.0x is locked
     if (video.playbackRate !== TARGET_SPEED) {
       video.playbackRate = TARGET_SPEED;
-    }
-    if (!video.muted) {
-      video.muted = true;
     }
 
     // Autoplay watchdog: if paused, immediately restart
@@ -800,8 +874,8 @@
     }
 
     // Live Playing Status
-    if (video.duration > 0 && !video.paused) {
-      updateHUDStatus('▶ Playing at 2.0x (Muted • 240p)', '#22c55e');
+    if (video.duration > 0 && !video.paused && Math.abs(video.currentTime - lastCurTime) < 0.2 && (Date.now() - lastCurTimeUpdate) < 2000) {
+      updateHUDStatus('▶ Playing at 2.0x (240p)', '#22c55e');
     }
 
     // ==================================================================
@@ -813,12 +887,12 @@
     if (isAtEnd && (video.currentTime > 2 || video.ended)) {
       if (!completionWaitStartTime) {
         completionWaitStartTime = Date.now();
-        console.log('[GFG Auto v5.6] Video playback completed. Waiting for GFG solid dark green tick...');
+        console.log('[GFG Auto v5.7] Video playback completed. Waiting for GFG solid dark green tick...');
       }
 
       // Check if GFG has officially marked the solid dark green tick on the sidebar
       if (isCurrentVideoCompleted()) {
-        console.log('[GFG Auto v5.6] ✓ Solid dark green tick CONFIRMED by GFG! Advancing...');
+        console.log('[GFG Auto v5.7] ✓ Solid dark green tick CONFIRMED by GFG! Advancing...');
         updateHUDStatus('✓ Dark Green Tick Confirmed! Advancing...', '#22c55e');
         completionWaitStartTime = 0;
         advanceToNext();
@@ -831,7 +905,7 @@
       // If after 8 seconds GFG still has NOT marked it complete with the green tick:
       // Watch-time was not satisfied or dropped! Do NOT skip! Replay from 0:00!
       if (waitElapsed > 8) {
-        console.log('[GFG Auto v5.6] GFG green tick NOT detected after 8s! Replaying from 0:00 to satisfy watch-time...');
+        console.log('[GFG Auto v5.7] GFG green tick NOT detected after 8s! Replaying from 0:00 to satisfy watch-time...');
         updateHUDStatus('↺ No Green Tick: Replaying from 0:00...', '#eab308');
         completionWaitStartTime = 0;
         replayVideoFromBeginning(video);
@@ -844,10 +918,10 @@
   }
 
   // ====================================================================
-  // 13. UNTHROTTLED PULSE ENGINE
+  // 15. UNTHROTTLED PULSE ENGINE
   // ====================================================================
   window.addEventListener('message', (e) => {
-    if (e.data?.source === 'gfg_isolated_pulse') {
+    if (e.data?.source === 'gfg_isolated_pulse' || e.data?.action === 'WATCHDOG_PING') {
       tick();
     }
   });

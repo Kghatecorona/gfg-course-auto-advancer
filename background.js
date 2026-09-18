@@ -1,12 +1,12 @@
-﻿// GFG Course Auto-Advancer - Background Service Worker (v5.4.0)
-// Prevents tab discarding, enforces browser-level muting, and sends 500ms keep-alive pulses
+// GFG Course Auto-Advancer - Background Service Worker (v5.7.0)
+// Prevents tab discarding, maintains active keep-alive watchdog
 
-console.log('[GFG Auto v5.4.0] Service Worker active');
+console.log('[GFG Auto v5.7.0] Service Worker active');
 
 function protectTab(tabId) {
   if (!tabId) return;
   try {
-    chrome.tabs.update(tabId, { autoDiscardable: false, muted: true }, () => {
+    chrome.tabs.update(tabId, { autoDiscardable: false }, () => {
       if (chrome.runtime.lastError) {}
     });
   } catch (e) {}
