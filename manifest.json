@@ -1,7 +1,7 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "Automatically advances GeeksforGeeks course videos at 2.0x speed, skipping completed lessons and quizzes, with background execution across virtual desktops.",
   "permissions": [
     "alarms",

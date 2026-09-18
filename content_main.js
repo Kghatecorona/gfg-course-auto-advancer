@@ -1,28 +1,54 @@
 // ======================================================================
-// GFG Course Auto-Advancer - Main World Execution Script (v5.4.0)
+// GFG Course Auto-Advancer - Main World Execution Script (v5.5.0)
 // Runs directly in the webpage context (world: "MAIN")
-// Complete Background & Virtual Desktop Hardening:
-// 1. IntersectionObserver Patch (forces elements to be reported visible & intersecting)
-// 2. Navigator.userActivation Spoof (Chrome treats tab as actively user-engaged)
-// 3. Complete Event Suppression (blocks visibilitychange, blur, freeze, pagehide, lostpointercapture)
-// 4. requestAnimationFrame Background Fallback (prevents player freeze in background tabs)
-// 5. Strict 2.0x Speed Lock & Guaranteed Muted Autoplay (never blocked by browser autoplay policy)
-// 6. Immediate Non-Blocking Direct URL Navigation (advances in background without delay)
-// 7. Streamlined Floating HUD (status, live progress, ETA, Skip, Replay - NO speed buttons)
+// Enhancements in v5.5.0:
+// 1. Enforce Lowest Quality (240p / 360p / Lowest Available) via localStorage, Video.js & DOM
+// 2. Web Audio Keep-Alive Oscillator (prevents Chrome background throttling & sleeping)
+// 3. Big Play Button Auto-Dismiss & Autoplay Kickstart (clears background gesture pauses)
+// 4. Client-Side SPA Navigation First (prevents blank gray screen hard reload stalls)
+// 5. Direct Sequential Index Advancing on lesson completion (never stalls on sidebar scroll)
+// 6. Stall Detection & Buffer Kickstart Watchdog (resumes playback if stuck)
+// 7. Relocated Top-Right Floating HUD (never occludes video controls or quality menus)
 // ======================================================================
 
 (function () {
   'use strict';
 
-  if (window.__GFG_AUTO_MAIN_V54__) return;
-  window.__GFG_AUTO_MAIN_V54__ = true;
+  if (window.__GFG_AUTO_MAIN_V55__) return;
+  window.__GFG_AUTO_MAIN_V55__ = true;
 
-  console.log('%c[GFG Auto v5.4.0] Bulletproof Background Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
+  console.log('%c[GFG Auto v5.5.0] Bulletproof Background & Lowest-Quality Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
 
   const TARGET_SPEED = 2.0;
 
   // ====================================================================
-  // 1. VISIBILITY & FOCUS SPOOFING
+  // 1. WEB AUDIO KEEP-ALIVE OSCILLATOR (ANTI-BACKGROUND THROTTLE)
+  // Browsers exempt media-producing tabs from background timer throttling
+  // ====================================================================
+  let audioWakeCtx = null;
+  function ensureAudioWakeLock() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioWakeCtx || audioWakeCtx.state === 'closed') {
+        audioWakeCtx = new AudioCtx();
+        const osc = audioWakeCtx.createOscillator();
+        const gain = audioWakeCtx.createGain();
+        gain.gain.value = 0.0001; // Silent
+        osc.connect(gain);
+        gain.connect(audioWakeCtx.destination);
+        osc.start();
+      }
+      if (audioWakeCtx.state === 'suspended') {
+        audioWakeCtx.resume().catch(() => {});
+      }
+    } catch (e) {}
+  }
+  ensureAudioWakeLock();
+  setInterval(ensureAudioWakeLock, 2000);
+
+  // ====================================================================
+  // 2. VISIBILITY & FOCUS SPOOFING
   // ====================================================================
   try {
     Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
@@ -34,7 +60,6 @@
     window.hasFocus = () => true;
   } catch (e) {}
 
-  // Suppress all background / blur / freeze events in capture phase
   const SUPPRESSED_EVENTS = [
     'visibilitychange',
     'webkitvisibilitychange',
@@ -56,10 +81,7 @@
   });
 
   // ====================================================================
-  // 2. INTERSECTION OBSERVER PATCH
-  // When a tab is in the background or on another virtual desktop, browsers
-  // report isIntersecting = false, which causes video players to auto-pause.
-  // This patch forces all observer entries to report as 100% visible and intersecting.
+  // 3. INTERSECTION OBSERVER PATCH
   // ====================================================================
   try {
     const NativeIntersectionObserver = window.IntersectionObserver;
@@ -83,9 +105,7 @@
   } catch (e) {}
 
   // ====================================================================
-  // 3. USER ACTIVATION SPOOFING
-  // Ensures Chrome considers the tab as having active user gestures,
-  // allowing autoplay and unthrottled execution.
+  // 4. USER ACTIVATION SPOOFING
   // ====================================================================
   try {
     if (window.Navigator && Navigator.prototype) {
@@ -99,9 +119,7 @@
   } catch (e) {}
 
   // ====================================================================
-  // 4. REQUEST ANIMATION FRAME BACKGROUND FALLBACK
-  // In background tabs, native requestAnimationFrame halts (0 fps).
-  // Falling back to a 16ms timer keeps player loops running smoothly.
+  // 5. REQUEST ANIMATION FRAME BACKGROUND FALLBACK
   // ====================================================================
   try {
     const nativeRAF = window.requestAnimationFrame;
@@ -116,8 +134,7 @@
   } catch (e) {}
 
   // ====================================================================
-  // 5. HTMLMEDIAELEMENT HOOKS (GUARANTEED 2.0x, MUTED AUTOPLAY, ANTI-PAUSE)
-  // Muted autoplay is 100% guaranteed never to be blocked by Chrome.
+  // 6. HTMLMEDIAELEMENT HOOKS (GUARANTEED 2.0x, MUTED AUTOPLAY, ANTI-PAUSE)
   // ====================================================================
   const origPlay = HTMLMediaElement.prototype.play;
   const origPause = HTMLMediaElement.prototype.pause;
@@ -131,20 +148,99 @@
   };
 
   HTMLMediaElement.prototype.pause = function () {
-    // Only allow pause if the video is actually at or near the end
     if (this.ended || (this.duration && this.currentTime >= this.duration - 0.5)) {
       return origPause.apply(this, arguments);
     }
-    // Block unwanted background pauses
-    console.log('[GFG Auto v5.4.0] Background pause attempt intercepted.');
+    console.log('[GFG Auto v5.5] Background pause attempt intercepted.');
   };
 
   // ====================================================================
-  // 6. FLOATING HUD (CLEAN, DRAGGABLE, NO SPEED BUTTONS)
+  // 7. LOWEST VIDEO QUALITY ENFORCEMENT ENGINE
+  // ====================================================================
+  let lastQualityCheckTime = 0;
+  function enforceLowestQuality() {
+    const now = Date.now();
+    if (now - lastQualityCheckTime < 2000) return;
+    lastQualityCheckTime = now;
+
+    // 1. Pre-seed and lock localStorage video player settings
+    try {
+      let settings = {};
+      try { settings = JSON.parse(localStorage.getItem('videoPlayerSavedSettings') || '{}'); } catch (e) {}
+      settings.gfgVolumebar = 0;
+      settings.PlaybackRate = TARGET_SPEED;
+      settings.VideoQuality = 240;
+      settings.Quality = 240;
+      settings.quality = 240;
+      settings.videoQuality = 240;
+      localStorage.setItem('videoPlayerSavedSettings', JSON.stringify(settings));
+      localStorage.setItem('jquality', '240');
+    } catch (e) {}
+
+    // 2. Video.js Quality Levels API
+    try {
+      const vjs = window.videojs;
+      if (vjs) {
+        const players = vjs.getAllPlayers ? vjs.getAllPlayers() : Object.values(vjs.getPlayers ? vjs.getPlayers() : {});
+        for (const p of players) {
+          if (!p) continue;
+          if (typeof p.qualityLevels === 'function') {
+            const ql = p.qualityLevels();
+            if (ql && ql.length > 0) {
+              let minH = Infinity, minIdx = 0;
+              for (let i = 0; i < ql.length; i++) {
+                const h = ql[i].height || ql[i].bandwidth || 999999;
+                if (h < minH) {
+                  minH = h;
+                  minIdx = i;
+                }
+              }
+              for (let i = 0; i < ql.length; i++) {
+                ql[i].enabled = (i === minIdx);
+              }
+              ql.selectedIndex = minIdx;
+            }
+          }
+          if (p.tech_?.hls?.levels) {
+            p.tech_.hls.currentLevel = 0;
+          }
+          if (p.tech_?.hls_?.levels) {
+            p.tech_.hls_.currentLevel = 0;
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 3. UI Settings / Quality Menu Selection in DOM
+    try {
+      const qualityItems = Array.from(document.querySelectorAll('.vjs-menu-item, [role="menuitemradio"], [role="menuitem"], button, span, li')).filter(el => {
+        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+        return (txt === '144p' || txt === '144' || txt === '240p' || txt === '240' || txt === '360p' || txt === '360');
+      });
+      if (qualityItems.length > 0) {
+        qualityItems.sort((a, b) => {
+          const valA = parseInt((a.innerText || a.textContent || '').replace(/\D/g, '')) || 9999;
+          const valB = parseInt((b.innerText || b.textContent || '').replace(/\D/g, '')) || 9999;
+          return valA - valB;
+        });
+        const lowest = qualityItems[0];
+        const isSelected = lowest.classList.contains('vjs-selected') || 
+                           lowest.classList.contains('selected') || 
+                           lowest.getAttribute('aria-checked') === 'true';
+        if (!isSelected) {
+          lowest.click();
+          console.log('[GFG Auto v5.5] Selected lowest quality in UI:', lowest.innerText);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // ====================================================================
+  // 8. FLOATING HUD (DOCK AT TOP-RIGHT TO AVOID COVERING VIDEO CONTROLS)
   // ====================================================================
   let hudContainer = null;
   let isMinimized = localStorage.getItem('gfg_hud_minimized') === 'true';
-  let hudStatusMessage = 'Active (2.0x Muted)';
+  let hudStatusMessage = 'Active (2.0x Muted • 240p)';
   let hudStatusColor = '#22c55e';
 
   function updateHUDStatus(msg, color = '#22c55e') {
@@ -159,7 +255,8 @@
     if (!hudContainer) {
       hudContainer = document.createElement('div');
       hudContainer.id = 'gfg-auto-hud-v5';
-      hudContainer.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; user-select: none;';
+      // Dock at top: 75px, right: 24px
+      hudContainer.style.cssText = 'position: fixed; top: 75px; right: 24px; z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; user-select: none;';
       document.body.appendChild(hudContainer);
 
       let isDragging = false;
@@ -225,7 +322,7 @@
         <div id="gfg-hud-header" style="display: flex; align-items: center; justify-content: space-between; cursor: move; border-bottom: 1px solid rgba(148, 163, 184, 0.15); padding-bottom: 6px;">
           <div style="display: flex; align-items: center; gap: 7px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
-            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.4</span>
+            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.5</span>
           </div>
           <button id="gfg-hud-min-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;" title="Minimize panel">_</button>
         </div>
@@ -258,7 +355,7 @@
         e.stopPropagation();
         updateHUDStatus('Manual skip triggered! Advancing...', '#eab308');
         lastAdvanceTime = 0;
-        advanceToNext();
+        advanceToNext(true);
       };
     }
 
@@ -276,7 +373,7 @@
   }
 
   // ====================================================================
-  // 7. INVENTIVE TICK DETECTION ENGINE (100% CERTAINTY)
+  // 9. INVENTIVE TICK DETECTION ENGINE (100% CERTAINTY)
   // ====================================================================
   function isRowCompleted(row) {
     if (!row) return false;
@@ -342,7 +439,7 @@
       }
     } catch (e) {}
 
-    // 5. Direct React Fiber Props (100% accessible in Main World)
+    // 5. Direct React Fiber Props
     try {
       let curr = row;
       let depth = 0;
@@ -372,7 +469,7 @@
   }
 
   // ====================================================================
-  // 8. SIDEBAR DISCOVERY & TARGETING
+  // 10. SIDEBAR DISCOVERY & TARGETING
   // ====================================================================
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
@@ -469,26 +566,9 @@
     return null;
   }
 
-  // ====================================================================
-  // 9. REPLAY GLITCHED END-FRAME VIDEOS FROM 0:00
-  // ====================================================================
-  function clickPlayerRestartButton() {
-    const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], i, svg'));
-    for (const el of buttons) {
-      const btn = el.closest('button, div[role="button"], a') || el;
-      const aria = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase();
-      const cls = (btn.className?.baseVal || btn.className || '').toString().toLowerCase();
-      if (aria.includes('replay') || aria.includes('restart') || aria.includes('rewind') || aria.includes('reset') ||
-          cls.includes('replay') || cls.includes('restart') || cls.includes('reset') || cls.includes('vjs-play-control')) {
-        try { btn.click(); return true; } catch (e) {}
-      }
-    }
-    return false;
-  }
-
   function replayVideoFromBeginning(video) {
     if (!video) return;
-    console.log('[GFG Auto v5.4.0] Glitched end-frame video detected! Resetting to 0:00...');
+    console.log('[GFG Auto v5.5] Resetting to 0:00...');
     try { video.currentTime = 0; } catch (e) {}
     try {
       video.dispatchEvent(new Event('seeking'));
@@ -496,51 +576,59 @@
       video.dispatchEvent(new Event('timeupdate'));
     } catch (e) {}
 
-    clickPlayerRestartButton();
-
     video.muted = true;
     video.playbackRate = TARGET_SPEED;
     origPlay.call(video).catch(() => {});
   }
 
   // ====================================================================
-  // 10. ADVANCER & DIRECT BACKGROUND NAVIGATION
+  // 11. ADVANCER & CLIENT-SIDE SPA ROUTING ENGINE
   // ====================================================================
   let lastAdvanceTime = 0;
 
-  function advanceToNext() {
+  function advanceToNext(forceSequential = false) {
     const now = Date.now();
     if (now - lastAdvanceTime < 2500) return;
     lastAdvanceTime = now;
 
-    updateHUDStatus('Advancing to next target...', '#22c55e');
-    console.log('[GFG Auto v5.4.0] Advancing to next target...');
+    updateHUDStatus('Advancing to next lesson...', '#22c55e');
+    console.log('[GFG Auto v5.5] Advancing to next lesson...');
 
-    const uncompleted = findFirstUncompletedVideoRow();
     const allRows = getSidebarVideoRows();
     const currentIdx = allRows.findIndex(r => isCurrentVideoRow(r));
 
-    // 1. Revisit missed uncompleted video earlier in track
-    if (uncompleted && currentIdx !== -1) {
-      const uncompletedIdx = allRows.indexOf(uncompleted);
-      if (uncompletedIdx < currentIdx) {
-        console.log('[GFG Auto v5.4.0] Revisiting missed uncompleted video:', uncompleted);
-        updateHUDStatus('Revisiting missed video...', '#22c55e');
-        navigateToRow(uncompleted);
-        return;
-      }
+    // 1. If currently at a valid video index and it just finished, advance to sequential next video!
+    if (currentIdx !== -1 && currentIdx + 1 < allRows.length) {
+      const nextRow = allRows[currentIdx + 1];
+      console.log('[GFG Auto v5.5] Advancing sequentially to next video row:', nextRow);
+      navigateToRow(nextRow);
+      return;
     }
 
-    // 2. Direct jump to next uncompleted video
+    // 2. Check for any earlier uncompleted video row
+    const uncompleted = findFirstUncompletedVideoRow();
     if (uncompleted && !isCurrentVideoRow(uncompleted)) {
-      console.log('[GFG Auto v5.4.0] Jumping directly to uncompleted video:', uncompleted);
-      updateHUDStatus('Jumping to next video...', '#22c55e');
+      console.log('[GFG Auto v5.5] Jumping to uncompleted video row:', uncompleted);
       navigateToRow(uncompleted);
       return;
     }
 
-    // 3. Click Next Track button if present
+    // 3. Click Top-Right Next » button if visible
     const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
+    const topNext = allInteractive.find(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return (txt === 'next' || txt === 'next »' || txt === 'next >>' || txt === 'next >' || txt === 'next ›') && r.top < 240 && r.left > 350;
+    });
+
+    if (topNext) {
+      console.log('[GFG Auto v5.5] Advancing via Next » button:', topNext);
+      clickOrNavigate(topNext);
+      return;
+    }
+
+    // 4. Click Next Track button if present
     const nextTrackBtn = allInteractive.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
@@ -549,26 +637,8 @@
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.4.0] Advancing to Next Track button:', nextTrackBtn);
-      updateHUDStatus('Advancing to Next Track...', '#22c55e');
+      console.log('[GFG Auto v5.5] Advancing to Next Track:', nextTrackBtn);
       clickOrNavigate(nextTrackBtn);
-      return;
-    }
-
-    // 4. Click Top-Right Next » button
-    const topNext = allInteractive.find(el => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-      const isNext = txt === 'next' || txt === 'next »' || txt === 'next >>' || txt === 'next >' || txt === 'next ›';
-      return isNext && r.top < 220 && r.left > 350;
-    });
-
-    if (topNext) {
-      const btn = topNext.closest('button, a, [role="button"]') || topNext;
-      console.log('[GFG Auto v5.4.0] Advancing via Top-Right Next button:', btn);
-      updateHUDStatus('Advancing via Next button...', '#22c55e');
-      clickOrNavigate(btn);
       return;
     }
 
@@ -577,7 +647,7 @@
   }
 
   function bypassQuizzesAndProblems() {
-    console.log('[GFG Auto v5.4.0] Bypassing non-video module...');
+    console.log('[GFG Auto v5.5] Bypassing non-video module...');
     updateHUDStatus('Bypassing Quiz / Problem...', '#eab308');
 
     const allTrackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
@@ -593,7 +663,7 @@
         continue;
       }
       if (foundCurrentTrack && !href.includes(curTrackSlug)) {
-        console.log('[GFG Auto v5.4.0] Advancing to next track link:', a);
+        console.log('[GFG Auto v5.5] Advancing to next track link:', a);
         clickOrNavigate(a);
         return;
       }
@@ -611,19 +681,18 @@
   function navigateToRow(row) {
     if (!row) return false;
 
+    // Scroll sidebar row into view so virtual DOM renders it
+    try {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {}
+
     const a = row.tagName === 'A' ? row : row.querySelector('a');
     if (a && a.href && !a.href.startsWith('javascript:')) {
-      const destUrl = a.href;
-      clickOrNavigate(a, destUrl);
+      clickOrNavigate(a, a.href);
       return true;
     }
 
-    const titleEl = Array.from(row.querySelectorAll('*')).find(el => {
-      const txt = (el.innerText || el.textContent || '').trim();
-      return txt.length > 3 && !txt.startsWith('Duration:') && !txt.includes('min');
-    }) || row;
-
-    const target = titleEl.closest('button, [role="button"]') || titleEl;
+    const target = row.closest('button, a, [role="button"]') || row;
     clickOrNavigate(target);
     return true;
   }
@@ -634,7 +703,7 @@
     const anchor = target.tagName === 'A' ? target : target.querySelector('a');
     const dest = explicitDestUrl || anchor?.href;
 
-    // Dispatch click events
+    // 1. Dispatch full pointer/mouse click event sequence (Next.js SPA routing intercepts this!)
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
       try {
         target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -642,24 +711,37 @@
     });
     try { target.click(); } catch (e) {}
 
-    // Immediate direct navigation for background tabs
+    // 2. Client-side Next.js router integration
+    if (dest && window.next?.router?.push) {
+      try {
+        window.next.router.push(dest);
+        return;
+      } catch (e) {}
+    }
+
+    // 3. Fallback to hard navigation ONLY after 3.5s if URL hasn't changed
     if (dest && !dest.startsWith('javascript:')) {
-      if (location.href !== dest) {
-        window.location.href = dest;
-      }
+      setTimeout(() => {
+        if (location.href !== dest) {
+          window.location.href = dest;
+        }
+      }, 3500);
     }
   }
 
   // ====================================================================
-  // 11. CORE AUTOMATION CONTROLLER LOOP
+  // 12. CORE AUTOMATION CONTROLLER LOOP
   // ====================================================================
   let currentUrl = location.href;
   let pageLoadCooldownUntil = 0;
   let checkedVideoKey = '';
   let hasCheckedInitialEndFrame = false;
+  let lastCurTime = -1;
+  let lastCurTimeUpdate = Date.now();
 
   function tick() {
     renderHUD();
+    enforceLowestQuality();
 
     // 1. Detect URL changes
     if (location.href !== currentUrl) {
@@ -668,7 +750,9 @@
       lastAdvanceTime = 0;
       checkedVideoKey = '';
       hasCheckedInitialEndFrame = false;
-      console.log('[GFG Auto v5.4.0] URL changed:', currentUrl);
+      lastCurTime = -1;
+      lastCurTimeUpdate = Date.now();
+      console.log('[GFG Auto v5.5] URL changed:', currentUrl);
       updateHUDStatus('Loading new video...', '#22c55e');
       return;
     }
@@ -693,7 +777,7 @@
     // 4. If current video is ALREADY COMPLETED (solid green tick), skip immediately!
     if (Date.now() > pageLoadCooldownUntil) {
       if (isCurrentVideoCompleted()) {
-        updateHUDStatus('✓ Already completed! Skipping...', '#22c55e');
+        updateHUDStatus('✓ Already completed! Advancing...', '#22c55e');
         advanceToNext();
         return;
       }
@@ -721,7 +805,6 @@
         }
       });
 
-      // Immediate play resumption if paused in background
       video.addEventListener('pause', () => {
         if (!video.ended && video.currentTime < (video.duration - 0.5)) {
           video.muted = true;
@@ -731,23 +814,10 @@
       });
     }
 
-    // Feature: Rewind glitched end-frames for uncompleted videos
-    const videoKey = location.href + '#' + (video.currentSrc || video.src || '');
-    if (checkedVideoKey !== videoKey) {
-      checkedVideoKey = videoKey;
-      hasCheckedInitialEndFrame = false;
-    }
-
-    if (!hasCheckedInitialEndFrame && video.duration > 3) {
-      if (!isCurrentVideoCompleted()) {
-        if (video.currentTime >= video.duration - 2 || video.ended) {
-          hasCheckedInitialEndFrame = true;
-          updateHUDStatus('↺ Glitched end-frame: Resetting to 0:00...', '#eab308');
-          replayVideoFromBeginning(video);
-          return;
-        }
-      }
-      hasCheckedInitialEndFrame = true;
+    // Auto-dismiss big play button if present
+    const bigPlay = document.querySelector('.vjs-big-play-button, .play-button, button.vjs-play-control, [aria-label*="play" i], [title*="play" i]');
+    if (bigPlay && video.paused && !video.ended) {
+      try { bigPlay.click(); } catch (e) {}
     }
 
     // Ensure 2.0x and muted are locked
@@ -763,9 +833,25 @@
       origPlay.call(video).catch(() => {});
     }
 
+    // Stall / Buffer detection watchdog: if currentTime is frozen for > 12s, kickstart buffer
+    if (!video.paused && !video.ended && video.duration > 0) {
+      if (Math.abs(video.currentTime - lastCurTime) < 0.1) {
+        if (Date.now() - lastCurTimeUpdate > 12000) {
+          console.log('[GFG Auto v5.5] Playback stalled! Kickstarting video buffer...');
+          lastCurTimeUpdate = Date.now();
+          video.currentTime += 0.2;
+          origPlay.call(video).catch(() => {});
+          if (bigPlay) { try { bigPlay.click(); } catch (e) {} }
+        }
+      } else {
+        lastCurTime = video.currentTime;
+        lastCurTimeUpdate = Date.now();
+      }
+    }
+
     // Live Playing Status
     if (video.duration > 0 && !video.paused) {
-      updateHUDStatus('▶ Playing at 2.0x (Muted)', '#22c55e');
+      updateHUDStatus('▶ Playing at 2.0x (Muted • 240p)', '#22c55e');
     }
 
     // 6. Video Completion Check - advance immediately
@@ -780,7 +866,7 @@
   }
 
   // ====================================================================
-  // 12. UNTHROTTLED PULSE ENGINE
+  // 13. UNTHROTTLED PULSE ENGINE
   // ====================================================================
   window.addEventListener('message', (e) => {
     if (e.data?.source === 'gfg_isolated_pulse') {
