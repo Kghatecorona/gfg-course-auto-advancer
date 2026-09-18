@@ -1,24 +1,44 @@
-﻿// ======================================================================
-// GFG Course Auto-Advancer - Main World Execution Script (v5.1.0)
+// ======================================================================
+// GFG Course Auto-Advancer - Main World Execution Script (v5.2.0)
 // Runs directly in the webpage context (world: "MAIN")
-// 1. Permanently spoofs visibilityState & hasFocus for all GFG scripts
-// 2. Intercepts blur and visibilitychange events so GFG never detects inactive tab
-// 3. Hooks HTMLMediaElement to suppress auto-pauses and enforce 2x muted playback
+// Features:
+// 1. Sleek, visible, draggable Floating HUD with live status & speed controls
+// 2. Dedicated 10x speed button with strict speed lock (and 2x, 5x, 16x options)
+// 3. Instant manual skip and rewind controls
 // 4. Infallible Green Tick Detection (SVG assets, stroke/fill, React Fiber)
-// 5. Automatic navigation via Next.js router / DOM links
-// 6. Receives 1-second unthrottled pulses from Background Service Worker
+// 5. Background & Virtual Desktop persistence (visibility & focus spoofing)
+// 6. Anti-pause hooks & seamless Next.js SPA auto-advancement
 // ======================================================================
 
 (function () {
   'use strict';
 
-  if (window.__GFG_AUTO_MAIN_V51__) return;
-  window.__GFG_AUTO_MAIN_V51__ = true;
+  if (window.__GFG_AUTO_MAIN_V52__) return;
+  window.__GFG_AUTO_MAIN_V52__ = true;
 
-  console.log('%c[GFG Auto v5.1.0] Main World Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
+  console.log('%c[GFG Auto v5.2.0] Main World Engine Active with 10x Speed & Visible HUD!', 'color: #38bdf8; font-size: 14px; font-weight: bold;');
 
   // ====================================================================
-  // 1. PAGE-WIDE VISIBILITY & FOCUS SPOOFER (MAIN WORLD)
+  // 1. SPEED CONFIGURATION & PERSISTENCE
+  // ====================================================================
+  let targetSpeed = parseFloat(localStorage.getItem('gfg_auto_speed') || '10.0');
+  if (isNaN(targetSpeed) || targetSpeed <= 0) targetSpeed = 10.0;
+
+  function setSpeed(newSpeed) {
+    targetSpeed = parseFloat(newSpeed);
+    localStorage.setItem('gfg_auto_speed', targetSpeed.toString());
+    const video = document.querySelector('video');
+    if (video) {
+      try {
+        video.playbackRate = targetSpeed;
+      } catch (e) {}
+    }
+    updateHUDStatus(`Speed locked at ${targetSpeed}x`, '#38bdf8');
+    renderHUD();
+  }
+
+  // ====================================================================
+  // 2. PAGE-WIDE VISIBILITY & FOCUS SPOOFER (MAIN WORLD)
   // ====================================================================
   try {
     Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
@@ -30,14 +50,14 @@
     window.hasFocus = () => true;
   } catch (e) {}
 
-  // Intercept and swallow blur, focusout, and visibilitychange in capturing phase
+  // Intercept and drop blur, focusout, and visibilitychange in capturing phase
   ['visibilitychange', 'blur', 'focusout'].forEach((evtName) => {
     window.addEventListener(evtName, (e) => e.stopImmediatePropagation(), true);
     document.addEventListener(evtName, (e) => e.stopImmediatePropagation(), true);
   });
 
   // ====================================================================
-  // 2. HTMLMEDIAELEMENT HOOKS (ENFORCE 2.0x, MUTED, AND ANTI-PAUSE)
+  // 3. HTMLMEDIAELEMENT HOOKS (ENFORCE TARGET SPEED, MUTED, AND ANTI-PAUSE)
   // ====================================================================
   const origPlay = HTMLMediaElement.prototype.play;
   const origPause = HTMLMediaElement.prototype.pause;
@@ -46,7 +66,7 @@
     this.muted = true;
     this.defaultMuted = true;
     this.volume = 0;
-    this.playbackRate = 2.0;
+    this.playbackRate = targetSpeed;
     return origPlay.apply(this, arguments);
   };
 
@@ -55,12 +75,290 @@
     if (this.ended || (this.duration && this.currentTime >= this.duration - 0.5)) {
       return origPause.apply(this, arguments);
     }
-    // If GFG or browser tries to pause in the background, ignore it!
-    console.log('[GFG Auto v5.1.0] Background pause suppressed. Keeping video playing.');
+    console.log('[GFG Auto v5.2.0] Background pause suppressed.');
   };
 
   // ====================================================================
-  // 3. GREEN TICK DETECTION ENGINE (100% CERTAINTY)
+  // 4. FLOATING HUD (VISIBLE, DRAGGABLE, INTERACTIVE)
+  // ====================================================================
+  let hudContainer = null;
+  let isMinimized = localStorage.getItem('gfg_hud_minimized') === 'true';
+  let hudStatusMessage = 'Initializing...';
+  let hudStatusColor = '#22c55e';
+
+  function updateHUDStatus(msg, color = '#22c55e') {
+    hudStatusMessage = msg;
+    hudStatusColor = color;
+    renderHUD();
+  }
+
+  function renderHUD() {
+    if (!document.body) return;
+
+    if (!hudContainer) {
+      hudContainer = document.createElement('div');
+      hudContainer.id = 'gfg-auto-hud-v5';
+      hudContainer.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 2147483647;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        user-select: none;
+      `;
+      document.body.appendChild(hudContainer);
+
+      // Draggable logic
+      let isDragging = false;
+      let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+      hudContainer.addEventListener('mousedown', (e) => {
+        const header = e.target.closest('#gfg-hud-header');
+        if (!header) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = hudContainer.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        hudContainer.style.bottom = 'auto';
+        hudContainer.style.right = 'auto';
+        hudContainer.style.left = `${origLeft}px`;
+        hudContainer.style.top = `${origTop}px`;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        hudContainer.style.left = `${Math.max(10, Math.min(window.innerWidth - 300, origLeft + dx))}px`;
+        hudContainer.style.top = `${Math.max(10, Math.min(window.innerHeight - 80, origTop + dy))}px`;
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+    }
+
+    if (isMinimized) {
+      hudContainer.innerHTML = `
+        <div id="gfg-hud-header" style="
+          background: rgba(15, 23, 42, 0.95);
+          backdrop-filter: blur(12px);
+          border: 1.5px solid #38bdf8;
+          border-radius: 9999px;
+          padding: 8px 16px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: move;
+          color: #f8fafc;
+          font-size: 12px;
+          font-weight: 600;
+        ">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
+          <span>⚡ ${targetSpeed}x</span>
+          <button id="gfg-hud-expand-btn" style="
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 2px;
+            line-height: 1;
+          " title="Expand panel">⤢</button>
+        </div>
+      `;
+      const expandBtn = document.getElementById('gfg-hud-expand-btn');
+      if (expandBtn) {
+        expandBtn.onclick = (e) => {
+          e.stopPropagation();
+          isMinimized = false;
+          localStorage.setItem('gfg_hud_minimized', 'false');
+          renderHUD();
+        };
+      }
+      return;
+    }
+
+    const video = document.querySelector('video');
+    let timeInfo = '';
+    if (video && video.duration > 0) {
+      const curM = Math.floor(video.currentTime / 60);
+      const curS = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
+      const durM = Math.floor(video.duration / 60);
+      const durS = Math.floor(video.duration % 60).toString().padStart(2, '0');
+      const remSec = Math.max(0, Math.round((video.duration - video.currentTime) / targetSpeed));
+      const remM = Math.floor(remSec / 60);
+      const remS = (remSec % 60).toString().padStart(2, '0');
+      timeInfo = `[${curM}:${curS} / ${durM}:${durS}] • ETA: ~${remM}m ${remS}s`;
+    }
+
+    const speeds = [1, 2, 5, 10, 16];
+    const speedButtonsHtml = speeds.map(s => {
+      const isActive = targetSpeed === s;
+      const isTenX = s === 10;
+      const activeStyle = isActive
+        ? (isTenX
+            ? 'background: #0284c7; border: 1.5px solid #38bdf8; box-shadow: 0 0 12px rgba(56,189,248,0.7); font-weight: 800; color: #ffffff;'
+            : 'background: #16a34a; border: 1.5px solid #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); font-weight: 700; color: #ffffff;')
+        : 'background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.2); color: #cbd5e1; font-weight: 500;';
+
+      const label = isTenX ? '⚡ 10x' : `${s}x`;
+      return `
+        <button class="gfg-speed-btn" data-speed="${s}" style="
+          ${activeStyle}
+          padding: 4px 9px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 11px;
+          transition: all 0.15s ease;
+        ">${label}</button>
+      `;
+    }).join('');
+
+    hudContainer.innerHTML = `
+      <div style="
+        background: rgba(15, 23, 42, 0.96);
+        backdrop-filter: blur(14px);
+        border: 1.5px solid #0ea5e9;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        padding: 12px 14px;
+        min-width: 270px;
+        max-width: 320px;
+        color: #f8fafc;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      ">
+        <!-- Header -->
+        <div id="gfg-hud-header" style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: move;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+          padding-bottom: 6px;
+        ">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
+            <span style="font-weight: 800; font-size: 13px; color: #38bdf8; letter-spacing: 0.3px;">GFG Auto v5.2</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button id="gfg-hud-min-btn" style="
+              background: none;
+              border: none;
+              color: #94a3b8;
+              cursor: pointer;
+              font-size: 14px;
+              padding: 0 4px;
+              line-height: 1;
+            " title="Minimize panel">_</button>
+          </div>
+        </div>
+
+        <!-- Status Message & Live Time -->
+        <div style="font-size: 12px; line-height: 1.4;">
+          <div style="color: #f1f5f9; font-weight: 600;">${hudStatusMessage}</div>
+          ${timeInfo ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">${timeInfo}</div>` : ''}
+        </div>
+
+        <!-- Speed Selector Row -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Playback Speed:</div>
+          <div style="display: flex; gap: 5px;">
+            ${speedButtonsHtml}
+          </div>
+        </div>
+
+        <!-- Action Buttons Row -->
+        <div style="display: flex; gap: 6px; margin-top: 2px;">
+          <button id="gfg-hud-skip-btn" style="
+            flex: 1;
+            background: #0284c7;
+            color: #ffffff;
+            border: none;
+            padding: 5px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: background 0.15s;
+          " title="Skip to next uncompleted lesson">⏭ Skip</button>
+
+          <button id="gfg-hud-replay-btn" style="
+            flex: 1;
+            background: rgba(51, 65, 85, 0.8);
+            color: #f8fafc;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            padding: 5px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: background 0.15s;
+          " title="Rewind to 0:00 and play">↺ Replay 0:00</button>
+        </div>
+      </div>
+    `;
+
+    // Bind Min/Max
+    const minBtn = document.getElementById('gfg-hud-min-btn');
+    if (minBtn) {
+      minBtn.onclick = (e) => {
+        e.stopPropagation();
+        isMinimized = true;
+        localStorage.setItem('gfg_hud_minimized', 'true');
+        renderHUD();
+      };
+    }
+
+    // Bind Speed Buttons
+    document.querySelectorAll('.gfg-speed-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const spd = parseFloat(btn.getAttribute('data-speed'));
+        if (spd) setSpeed(spd);
+      };
+    });
+
+    // Bind Skip Button
+    const skipBtn = document.getElementById('gfg-hud-skip-btn');
+    if (skipBtn) {
+      skipBtn.onclick = (e) => {
+        e.stopPropagation();
+        updateHUDStatus('Manual skip triggered! Advancing...', '#eab308');
+        lastAdvanceTime = 0;
+        advanceToNext();
+      };
+    }
+
+    // Bind Replay Button
+    const replayBtn = document.getElementById('gfg-hud-replay-btn');
+    if (replayBtn) {
+      replayBtn.onclick = (e) => {
+        e.stopPropagation();
+        const v = document.querySelector('video');
+        if (v) {
+          updateHUDStatus('Rewinding to 0:00...', '#eab308');
+          replayVideoFromBeginning(v);
+        }
+      };
+    }
+  }
+
+  // ====================================================================
+  // 5. GREEN TICK DETECTION ENGINE (100% CERTAINTY)
   // ====================================================================
   function isRowCompleted(row) {
     if (!row) return false;
@@ -88,7 +386,6 @@
     for (const svg of svgs) {
       const rawHtml = svg.outerHTML.toLowerCase();
 
-      // Check for white checkmark stroke (completed solid green tick has stroke="white")
       const paths = svg.querySelectorAll('path');
       for (const p of paths) {
         const stroke = (p.getAttribute('stroke') || p.style.stroke || '').toLowerCase();
@@ -97,7 +394,6 @@
         }
       }
 
-      // Check for filled green circle (#2F8D46)
       const circles = svg.querySelectorAll('circle');
       for (const c of circles) {
         const fill = (c.getAttribute('fill') || c.style.fill || '').toLowerCase();
@@ -113,7 +409,7 @@
       }
     }
 
-    // 4. Coordinate Element Sampling (right edge tick icon)
+    // 4. Coordinate Element Sampling
     try {
       const rect = row.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
@@ -158,7 +454,7 @@
   }
 
   // ====================================================================
-  // 4. SIDEBAR NAVIGATION & PLAYLIST DISCOVERY
+  // 6. SIDEBAR NAVIGATION & PLAYLIST DISCOVERY
   // ====================================================================
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
@@ -256,7 +552,7 @@
   }
 
   // ====================================================================
-  // 5. REPLAY GLITCHED END-FRAME VIDEOS FROM 0:00
+  // 7. REPLAY GLITCHED END-FRAME VIDEOS FROM 0:00
   // ====================================================================
   function clickPlayerRestartButton() {
     const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], i, svg'));
@@ -274,7 +570,7 @@
 
   function replayVideoFromBeginning(video) {
     if (!video) return;
-    console.log('[GFG Auto v5.1.0] Glitched end-frame video detected! Resetting to 0:00...');
+    console.log('[GFG Auto v5.2.0] Glitched end-frame video detected! Resetting to 0:00...');
     try { video.currentTime = 0; } catch (e) {}
     try {
       video.dispatchEvent(new Event('seeking'));
@@ -286,12 +582,12 @@
 
     video.muted = true;
     video.volume = 0;
-    video.playbackRate = 2.0;
+    video.playbackRate = targetSpeed;
     origPlay.call(video).catch(() => {});
   }
 
   // ====================================================================
-  // 6. ADVANCER & NAVIGATION (SPA + DOM)
+  // 8. ADVANCER & NAVIGATION (SPA + DOM)
   // ====================================================================
   let lastAdvanceTime = 0;
 
@@ -300,7 +596,8 @@
     if (now - lastAdvanceTime < 2500) return;
     lastAdvanceTime = now;
 
-    console.log('[GFG Auto v5.1.0] Advancing to next target...');
+    updateHUDStatus('Advancing to next target...', '#38bdf8');
+    console.log('[GFG Auto v5.2.0] Advancing to next target...');
 
     const uncompleted = findFirstUncompletedVideoRow();
     const allRows = getSidebarVideoRows();
@@ -310,7 +607,8 @@
     if (uncompleted && currentIdx !== -1) {
       const uncompletedIdx = allRows.indexOf(uncompleted);
       if (uncompletedIdx < currentIdx) {
-        console.log('[GFG Auto v5.1.0] Revisiting missed uncompleted video:', uncompleted);
+        console.log('[GFG Auto v5.2.0] Revisiting missed uncompleted video:', uncompleted);
+        updateHUDStatus('Revisiting missed video...', '#38bdf8');
         navigateToRow(uncompleted);
         return;
       }
@@ -318,7 +616,8 @@
 
     // 2. Direct jump to next uncompleted video
     if (uncompleted && !isCurrentVideoRow(uncompleted)) {
-      console.log('[GFG Auto v5.1.0] Jumping directly to uncompleted video:', uncompleted);
+      console.log('[GFG Auto v5.2.0] Jumping directly to uncompleted video:', uncompleted);
+      updateHUDStatus('Jumping to next uncompleted video...', '#38bdf8');
       navigateToRow(uncompleted);
       return;
     }
@@ -333,7 +632,8 @@
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.1.0] Advancing to Next Track button:', nextTrackBtn);
+      console.log('[GFG Auto v5.2.0] Advancing to Next Track button:', nextTrackBtn);
+      updateHUDStatus('Advancing to Next Track...', '#38bdf8');
       clickTarget(nextTrackBtn);
       return;
     }
@@ -349,7 +649,8 @@
 
     if (topNext) {
       const btn = topNext.closest('button, a, [role="button"]') || topNext;
-      console.log('[GFG Auto v5.1.0] Advancing via Top-Right Next button:', btn);
+      console.log('[GFG Auto v5.2.0] Advancing via Top-Right Next button:', btn);
+      updateHUDStatus('Advancing via Next button...', '#38bdf8');
       clickTarget(btn);
       return;
     }
@@ -359,7 +660,8 @@
   }
 
   function bypassQuizzesAndProblems() {
-    console.log('[GFG Auto v5.1.0] Bypassing non-video module...');
+    console.log('[GFG Auto v5.2.0] Bypassing non-video module...');
+    updateHUDStatus('Bypassing Quiz / Problem...', '#eab308');
 
     const allTrackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
     const curPath = decodeURIComponent(location.pathname).toLowerCase();
@@ -374,7 +676,7 @@
         continue;
       }
       if (foundCurrentTrack && !href.includes(curTrackSlug)) {
-        console.log('[GFG Auto v5.1.0] Advancing to next track link:', a);
+        console.log('[GFG Auto v5.2.0] Advancing to next track link:', a);
         clickTarget(a);
         return;
       }
@@ -400,7 +702,6 @@
     if (a && a.href && !a.href.startsWith('javascript:')) {
       const destUrl = a.href;
       clickTarget(a);
-      // If client-side router didn't transition within 1.5s, trigger Next.js router or navigate
       setTimeout(() => {
         if (location.href !== destUrl) {
           try {
@@ -437,7 +738,7 @@
   }
 
   // ====================================================================
-  // 7. CORE AUTOMATION CONTROLLER LOOP
+  // 9. CORE AUTOMATION CONTROLLER LOOP
   // ====================================================================
   let currentUrl = location.href;
   let pageLoadCooldownUntil = 0;
@@ -445,6 +746,8 @@
   let hasCheckedInitialEndFrame = false;
 
   function tick() {
+    renderHUD();
+
     // 1. Detect URL changes
     if (location.href !== currentUrl) {
       currentUrl = location.href;
@@ -452,12 +755,14 @@
       lastAdvanceTime = 0;
       checkedVideoKey = '';
       hasCheckedInitialEndFrame = false;
-      console.log('[GFG Auto v5.1.0] URL changed:', currentUrl);
+      console.log('[GFG Auto v5.2.0] URL changed:', currentUrl);
+      updateHUDStatus('Loading new video...', '#38bdf8');
       return;
     }
 
     // 2. Standby if not on a course track
     if (!location.pathname.includes('/track/')) {
+      updateHUDStatus('Standby on course page', '#94a3b8');
       return;
     }
 
@@ -467,7 +772,7 @@
                            location.pathname.includes('/contest/') || 
                            location.pathname.includes('/assignment/');
     if (isNonVideoPage) {
-      console.log('[GFG Auto v5.1.0] Non-video page detected. Skipping to Next Track...');
+      updateHUDStatus('Skipping Quiz / Problem...', '#eab308');
       bypassQuizzesAndProblems();
       return;
     }
@@ -475,31 +780,42 @@
     // 4. If current video is ALREADY COMPLETED (solid green tick), skip immediately!
     if (Date.now() > pageLoadCooldownUntil) {
       if (isCurrentVideoCompleted()) {
-        console.log('[GFG Auto v5.1.0] Video is already completed (solid green tick). Skipping immediately!');
+        updateHUDStatus('✓ Already completed! Skipping...', '#22c55e');
         advanceToNext();
         return;
       }
     }
 
-    // 5. Video Player Management (2.0x, Muted, Continuous Autoplay)
+    // 5. Video Player Management (Speed Lock, Muted, Continuous Autoplay)
     const video = document.querySelector('video');
     if (!video) {
       const bodyText = (document.body?.innerText || '').toLowerCase();
       if (bodyText.includes('go to problems') || bodyText.includes('solve problems') || bodyText.includes('start quiz')) {
         bypassQuizzesAndProblems();
+      } else {
+        updateHUDStatus('Waiting for video player...', '#94a3b8');
       }
       return;
     }
 
-    // Attach pause-prevention listener to video directly
-    if (!video.__gfg_anti_pause_set__) {
-      video.__gfg_anti_pause_set__ = true;
+    // Attach pause-prevention and rate-lock listener to video directly
+    if (!video.__gfg_listeners_set__) {
+      video.__gfg_listeners_set__ = true;
+
+      // Ensure target speed cannot be overridden by player
+      video.addEventListener('ratechange', () => {
+        if (video.playbackRate !== targetSpeed) {
+          video.playbackRate = targetSpeed;
+        }
+      });
+
+      // Prevent player auto-pause
       video.addEventListener('pause', () => {
         if (!video.ended && video.currentTime < (video.duration - 0.5)) {
           setTimeout(() => {
             video.muted = true;
             video.volume = 0;
-            video.playbackRate = 2.0;
+            video.playbackRate = targetSpeed;
             origPlay.call(video).catch(() => {});
           }, 150);
         }
@@ -517,6 +833,7 @@
       if (!isCurrentVideoCompleted()) {
         if (video.currentTime >= video.duration - 3 || video.ended) {
           hasCheckedInitialEndFrame = true;
+          updateHUDStatus('↺ Glitched end-frame: Resetting to 0:00...', '#eab308');
           replayVideoFromBeginning(video);
           return;
         }
@@ -524,44 +841,55 @@
       hasCheckedInitialEndFrame = true;
     }
 
-    // Lock 2.0x playback rate and muted audio
-    if (video.playbackRate !== 2.0) video.playbackRate = 2.0;
-    if (!video.muted) video.muted = true;
-    if (video.volume !== 0) video.volume = 0;
+    // Strictly lock playback rate and muted audio
+    if (video.playbackRate !== targetSpeed) {
+      video.playbackRate = targetSpeed;
+    }
+    if (!video.muted) {
+      video.muted = true;
+    }
+    if (video.volume !== 0) {
+      video.volume = 0;
+    }
 
-    // Autoplay if paused in the background
+    // Autoplay if paused
     if (video.paused && !video.ended) {
       origPlay.call(video).catch(() => {});
+    }
+
+    // Live Playing Status
+    if (video.duration > 0 && !video.paused) {
+      updateHUDStatus(`▶ Playing at ${targetSpeed}x (Muted)`, '#22c55e');
     }
 
     // 6. Video Completion Check
     const isFinished = video.ended || (video.duration > 5 && video.currentTime >= video.duration - 0.5);
     if (isFinished && hasCheckedInitialEndFrame) {
-      console.log('[GFG Auto v5.1.0] Video completed! Advancing in 1.2s...');
+      updateHUDStatus('✓ Video complete! Advancing...', '#22c55e');
       setTimeout(() => {
         advanceToNext();
-      }, 1200);
+      }, 1000);
       return;
     }
   }
 
   // ====================================================================
-  // 8. UNTHROTTLED PULSE LISTENERS
+  // 10. UNTHROTTLED PULSE LISTENERS
   // ====================================================================
-  // 1. Receive 1-second pulse from Isolated World Bridge (connected to Service Worker)
+  // 1. Receive 1-second pulse from Isolated World Bridge
   window.addEventListener('message', (e) => {
     if (e.data?.source === 'gfg_isolated_pulse') {
       tick();
     }
   });
 
-  // 2. Web Worker pulse loop (unthrottled timer in background)
+  // 2. Web Worker pulse loop (unthrottled timer)
   try {
     const blob = new Blob(["setInterval(() => postMessage('tick'), 1000);"], { type: 'application/javascript' });
     const worker = new Worker(URL.createObjectURL(blob));
     worker.onmessage = () => tick();
   } catch (e) {}
 
-  // 3. Fallback interval
+  // 3. Standard interval fallback
   setInterval(tick, 1000);
 })();

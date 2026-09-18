@@ -1,14 +1,12 @@
-﻿// GFG Course Auto-Advancer - Background Service Worker (v5.1.0)
+﻿// GFG Course Auto-Advancer - Background Service Worker (v5.2.0)
 // Maintains continuous keep-alive, port pulsing, and background unthrottling
 
-console.log('[GFG Auto v5.1.0] Background Service Worker registered');
+console.log('[GFG Auto v5.2.0] Background Service Worker registered');
 
 // Persistent Port Keep-Alive
-// When a content script connects via Port, we send a heartbeat every 1 second.
-// This prevents Chrome from suspending the service worker and wakes up the tab renderer.
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'gfg_keepalive_port') {
-    console.log('[GFG Auto v5.1.0] Active keep-alive port connected');
+    console.log('[GFG Auto v5.2.0] Active keep-alive port connected');
     
     const interval = setInterval(() => {
       try {
@@ -19,7 +17,6 @@ chrome.runtime.onConnect.addListener((port) => {
     }, 1000);
 
     port.onMessage.addListener((msg) => {
-      // Respond to content script pings
       if (msg?.action === 'ACK') {
         // Keep-alive acknowledged
       }
@@ -27,12 +24,12 @@ chrome.runtime.onConnect.addListener((port) => {
 
     port.onDisconnect.addListener(() => {
       clearInterval(interval);
-      console.log('[GFG Auto v5.1.0] Keep-alive port disconnected');
+      console.log('[GFG Auto v5.2.0] Keep-alive port disconnected');
     });
   }
 });
 
-// Alarm fallback in case port drops
+// Alarm watchdog fallback
 chrome.alarms.create('gfg_alarm_watchdog', { periodInMinutes: 0.5 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

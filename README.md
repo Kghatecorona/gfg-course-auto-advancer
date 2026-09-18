@@ -1,29 +1,28 @@
-﻿# GFG Course Auto-Advancer (v5.0.0)
+﻿# GFG Course Auto-Advancer (v5.2.0)
 
-A lightweight, robust Chrome Extension (Manifest V3) that automates GeeksforGeeks course videos at 2.0x speed muted, accurately detects completed lessons, bypasses quizzes/problems, and works reliably in the background across virtual desktops.
+A lightweight, robust Chrome Extension (Manifest V3) that automates GeeksforGeeks course videos at up to 10x speed muted, with a visible floating interactive HUD, accurate green tick detection, quiz/problem bypassing, and persistent background execution across virtual desktops.
 
-## Key Features
+## What's New in v5.2.0
 
-1. **Bulletproof Green Tick Detection**:
-   - Analyzes GeeksforGeeks official CDN SVG assets (`Group11(1)` vs `Group11`).
-   - Verifies inline SVG attributes (`stroke="white"` and `<circle fill="#2F8D46">` vs hollow checkmarks).
-   - Inspects internal React Fiber component properties (`isCompleted: true`).
-2. **Instant Skip for Completed Videos**:
-   - Skips videos that already possess a solid dark green completion checkmark.
-3. **Smart Replay for Glitched End-Frames**:
-   - If an uncompleted video opens stuck at the end frame (`-0:00`), it automatically rewinds to `0:00` and plays through at 2x muted to earn the completion checkmark.
-4. **Quiz & Problem Bypass**:
-   - Automatically detects non-video modules (quizzes, coding problems, contests, assignments) and bypasses them directly to the Next Track.
-5. **Silent 2.0x Speed & Muted Playback**:
-   - Automatically enforces `playbackRate = 2.0` and `muted = true` without injecting any buttons or HUD overlays into your interface.
-6. **Virtual Desktop & Background Tab Keep-Alive**:
-   - Uses Web Worker intervals, background service worker pulse alarms, and a Web Audio silent oscillator to ensure Chrome never freezes or throttles video playback when switching virtual desktops.
+1. **Visible, Draggable Floating HUD**:
+   - Sleek dark glassmorphism interface in the bottom-right corner.
+   - Shows live video title, current playback time, total duration, and exact remaining ETA calculated at your current speed.
+   - Draggable across the screen so it never obstructs your view.
+   - Can be minimized to a compact pill (`_` button) or expanded (`⤢` button).
+2. **Dedicated `⚡ 10x` Speed Button**:
+   - Quick speed buttons: `1x`, `2x`, `5x`, `⚡ 10x` (prominent), and `16x` (hardware max).
+   - Speed is strictly locked: if GFG's player attempts to reset the speed, the extension immediately forces it back to your selected speed.
+   - Speed choice persists across video navigation.
+3. **Manual Action Controls**:
+   - **`⏭ Skip`**: Instantly skips to the next uncompleted lesson in the course.
+   - **`↺ Replay 0:00`**: Rewinds the current video to the beginning and restarts playback.
+4. **Dual-World Background Persistence**:
+   - Injected in the `MAIN` world to spoof page visibility for GFG's React scripts.
+   - Connected via an unthrottled 1-second background service worker port so playback and advancement never halt in other virtual desktops.
 
-## Installation / Reloading
+## How to Install / Reload in Chrome
 
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** in the top-right corner.
-3. If previously installed, click **Remove** on the old GFG Auto-Advancer, or click the **Reload** (circular arrow) icon.
-4. Click **Load unpacked** and select:
-   `C:\Users\kavya\Desktop\Sem5\GFG_Auto_Player`
-5. Navigate to any GeeksforGeeks course batch track and watch it run!
+1. Open Google Chrome and go to `chrome://extensions/`.
+2. Ensure **Developer mode** is enabled in the top right.
+3. Click the **Reload** (circular arrow) icon on **GFG Course Auto-Advancer** (or click **Load unpacked** and select `C:\Users\kavya\Desktop\Sem5\GFG_Auto_Player`).
+4. Refresh your GeeksforGeeks course batch tab!
