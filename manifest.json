@@ -1,8 +1,8 @@
 ﻿{
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer",
-  "version": "5.0.0",
-  "description": "Automatically advances GeeksforGeeks course videos at 2x speed muted, skipping completed lessons and quizzes.",
+  "version": "5.1.0",
+  "description": "Automatically advances GeeksforGeeks course videos at 2x speed muted, skipping completed lessons and quizzes, with background execution across virtual desktops.",
   "permissions": [
     "alarms",
     "storage"
@@ -19,7 +19,17 @@
         "*://*.geeksforgeeks.org/batch/*",
         "*://geeksforgeeks.org/batch/*"
       ],
-      "js": ["content.js"],
+      "js": ["content_main.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://*.geeksforgeeks.org/batch/*",
+        "*://geeksforgeeks.org/batch/*"
+      ],
+      "js": ["content_isolated.js"],
       "run_at": "document_start",
       "all_frames": true
     }
