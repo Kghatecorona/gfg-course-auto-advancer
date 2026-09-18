@@ -1,29 +1,28 @@
 // ======================================================================
-// GFG Course Auto-Advancer - Main World Execution Script (v5.5.0)
+// GFG Course Auto-Advancer - Main World Execution Script (v5.6.0)
 // Runs directly in the webpage context (world: "MAIN")
-// Enhancements in v5.5.0:
-// 1. Enforce Lowest Quality (240p / 360p / Lowest Available) via localStorage, Video.js & DOM
-// 2. Web Audio Keep-Alive Oscillator (prevents Chrome background throttling & sleeping)
-// 3. Big Play Button Auto-Dismiss & Autoplay Kickstart (clears background gesture pauses)
-// 4. Client-Side SPA Navigation First (prevents blank gray screen hard reload stalls)
-// 5. Direct Sequential Index Advancing on lesson completion (never stalls on sidebar scroll)
-// 6. Stall Detection & Buffer Kickstart Watchdog (resumes playback if stuck)
-// 7. Relocated Top-Right Floating HUD (never occludes video controls or quality menus)
+// Strict Dark Green Tick Verification Engine:
+// 1. NEVER assumes a video is complete just because playback finished
+// 2. Waits for GFG's authoritative dark green tick (solid #2F8D46 circle + white checkmark)
+// 3. Advances ONLY when solid dark green tick is confirmed
+// 4. If green tick is not granted within 8s, rewinds and replays to fulfill watch-time
+// 5. Forces lowest quality (240p / 360p / Lowest Available)
+// 6. Web Audio continuous silent keep-alive (zero background throttling)
+// 7. Client-side SPA navigation & unpause watchdog
 // ======================================================================
 
 (function () {
   'use strict';
 
-  if (window.__GFG_AUTO_MAIN_V55__) return;
-  window.__GFG_AUTO_MAIN_V55__ = true;
+  if (window.__GFG_AUTO_MAIN_V56__) return;
+  window.__GFG_AUTO_MAIN_V56__ = true;
 
-  console.log('%c[GFG Auto v5.5.0] Bulletproof Background & Lowest-Quality Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
+  console.log('%c[GFG Auto v5.6.0] Strict Green-Tick Verification Engine Active!', 'color: #22c55e; font-size: 14px; font-weight: bold;');
 
   const TARGET_SPEED = 2.0;
 
   // ====================================================================
   // 1. WEB AUDIO KEEP-ALIVE OSCILLATOR (ANTI-BACKGROUND THROTTLE)
-  // Browsers exempt media-producing tabs from background timer throttling
   // ====================================================================
   let audioWakeCtx = null;
   function ensureAudioWakeLock() {
@@ -34,7 +33,7 @@
         audioWakeCtx = new AudioCtx();
         const osc = audioWakeCtx.createOscillator();
         const gain = audioWakeCtx.createGain();
-        gain.gain.value = 0.0001; // Silent
+        gain.gain.value = 0.0001;
         osc.connect(gain);
         gain.connect(audioWakeCtx.destination);
         osc.start();
@@ -151,11 +150,11 @@
     if (this.ended || (this.duration && this.currentTime >= this.duration - 0.5)) {
       return origPause.apply(this, arguments);
     }
-    console.log('[GFG Auto v5.5] Background pause attempt intercepted.');
+    console.log('[GFG Auto v5.6] Background pause attempt intercepted.');
   };
 
   // ====================================================================
-  // 7. LOWEST VIDEO QUALITY ENFORCEMENT ENGINE
+  // 7. LOWEST VIDEO QUALITY ENFORCEMENT (240p / Lowest Available)
   // ====================================================================
   let lastQualityCheckTime = 0;
   function enforceLowestQuality() {
@@ -163,7 +162,6 @@
     if (now - lastQualityCheckTime < 2000) return;
     lastQualityCheckTime = now;
 
-    // 1. Pre-seed and lock localStorage video player settings
     try {
       let settings = {};
       try { settings = JSON.parse(localStorage.getItem('videoPlayerSavedSettings') || '{}'); } catch (e) {}
@@ -177,7 +175,6 @@
       localStorage.setItem('jquality', '240');
     } catch (e) {}
 
-    // 2. Video.js Quality Levels API
     try {
       const vjs = window.videojs;
       if (vjs) {
@@ -190,10 +187,7 @@
               let minH = Infinity, minIdx = 0;
               for (let i = 0; i < ql.length; i++) {
                 const h = ql[i].height || ql[i].bandwidth || 999999;
-                if (h < minH) {
-                  minH = h;
-                  minIdx = i;
-                }
+                if (h < minH) { minH = h; minIdx = i; }
               }
               for (let i = 0; i < ql.length; i++) {
                 ql[i].enabled = (i === minIdx);
@@ -201,17 +195,12 @@
               ql.selectedIndex = minIdx;
             }
           }
-          if (p.tech_?.hls?.levels) {
-            p.tech_.hls.currentLevel = 0;
-          }
-          if (p.tech_?.hls_?.levels) {
-            p.tech_.hls_.currentLevel = 0;
-          }
+          if (p.tech_?.hls?.levels) { p.tech_.hls.currentLevel = 0; }
+          if (p.tech_?.hls_?.levels) { p.tech_.hls_.currentLevel = 0; }
         }
       }
     } catch (e) {}
 
-    // 3. UI Settings / Quality Menu Selection in DOM
     try {
       const qualityItems = Array.from(document.querySelectorAll('.vjs-menu-item, [role="menuitemradio"], [role="menuitem"], button, span, li')).filter(el => {
         const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
@@ -229,14 +218,13 @@
                            lowest.getAttribute('aria-checked') === 'true';
         if (!isSelected) {
           lowest.click();
-          console.log('[GFG Auto v5.5] Selected lowest quality in UI:', lowest.innerText);
         }
       }
     } catch (e) {}
   }
 
   // ====================================================================
-  // 8. FLOATING HUD (DOCK AT TOP-RIGHT TO AVOID COVERING VIDEO CONTROLS)
+  // 8. FLOATING HUD (TOP-RIGHT DOCKED)
   // ====================================================================
   let hudContainer = null;
   let isMinimized = localStorage.getItem('gfg_hud_minimized') === 'true';
@@ -255,7 +243,6 @@
     if (!hudContainer) {
       hudContainer = document.createElement('div');
       hudContainer.id = 'gfg-auto-hud-v5';
-      // Dock at top: 75px, right: 24px
       hudContainer.style.cssText = 'position: fixed; top: 75px; right: 24px; z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; user-select: none;';
       document.body.appendChild(hudContainer);
 
@@ -322,7 +309,7 @@
         <div id="gfg-hud-header" style="display: flex; align-items: center; justify-content: space-between; cursor: move; border-bottom: 1px solid rgba(148, 163, 184, 0.15); padding-bottom: 6px;">
           <div style="display: flex; align-items: center; gap: 7px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
-            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.5</span>
+            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.6</span>
           </div>
           <button id="gfg-hud-min-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;" title="Minimize panel">_</button>
         </div>
@@ -355,7 +342,7 @@
         e.stopPropagation();
         updateHUDStatus('Manual skip triggered! Advancing...', '#eab308');
         lastAdvanceTime = 0;
-        advanceToNext(true);
+        advanceToNext();
       };
     }
 
@@ -373,12 +360,35 @@
   }
 
   // ====================================================================
-  // 9. INVENTIVE TICK DETECTION ENGINE (100% CERTAINTY)
+  // 9. AUTHORITATIVE SOLID DARK GREEN TICK DETECTION
+  // Differentiates with 100% precision:
+  // - SOLID DARK GREEN TICK: fill="#2F8D46" circle AND stroke="white" path
+  // - HOLLOW CIRCLE (INCOMPLETE): stroke="#2F8D46" with NO fill and NO white path
   // ====================================================================
   function isRowCompleted(row) {
     if (!row) return false;
 
-    // 1. Image src check (Group11(1) is completed, Group11 is incomplete)
+    // 1. Authoritative SVG Inspection
+    const svgs = row.querySelectorAll('svg');
+    for (const svg of svgs) {
+      const raw = svg.outerHTML.toLowerCase();
+      const hasSolidFill = raw.includes('fill="#2f8d46"') || raw.includes("fill='#2f8d46'") || raw.includes('fill="rgb(47, 141, 70)"');
+      const hasWhitePath = raw.includes('stroke="white"') || raw.includes("stroke='white'") || 
+                           raw.includes('stroke="#ffffff"') || raw.includes('stroke="#fff"') || 
+                           raw.includes('stroke="rgb(255, 255, 255)"');
+
+      // STRICT: Must have solid green circle AND white checkmark
+      if (hasSolidFill && hasWhitePath) {
+        return true;
+      }
+
+      // Explicitly reject hollow circles
+      if (raw.includes('stroke-width="0.7"') || (raw.includes('stroke="#2f8d46"') && !hasWhitePath)) {
+        return false;
+      }
+    }
+
+    // 2. Image src inspection (Group11(1) = complete, Group11 = incomplete)
     const imgs = row.querySelectorAll('img');
     for (const img of imgs) {
       const src = (img.getAttribute('src') || img.src || '').toLowerCase();
@@ -386,7 +396,7 @@
       if (src.includes('group11') && !src.includes('(1)') && !src.includes('%281%29')) return false;
     }
 
-    // 2. CSS background-image
+    // 3. CSS background-image
     const allDescendants = [row, ...Array.from(row.querySelectorAll('*'))];
     for (const el of allDescendants) {
       try {
@@ -396,50 +406,7 @@
       } catch (e) {}
     }
 
-    // 3. Inline SVG markup (white stroke checkmark or solid green circle fill)
-    const svgs = row.querySelectorAll('svg');
-    for (const svg of svgs) {
-      const rawHtml = svg.outerHTML.toLowerCase();
-
-      const paths = svg.querySelectorAll('path');
-      for (const p of paths) {
-        const stroke = (p.getAttribute('stroke') || p.style.stroke || '').toLowerCase();
-        if (stroke === 'white' || stroke === '#fff' || stroke === '#ffffff' || stroke === 'rgb(255, 255, 255)') {
-          return true;
-        }
-      }
-
-      const circles = svg.querySelectorAll('circle');
-      for (const c of circles) {
-        const fill = (c.getAttribute('fill') || c.style.fill || '').toLowerCase();
-        if (fill === '#2f8d46' || fill === 'rgb(47, 141, 70)') {
-          return true;
-        }
-      }
-
-      if (rawHtml.includes('stroke="white"') || rawHtml.includes("stroke='white'") ||
-          rawHtml.includes('stroke="#ffffff"') || rawHtml.includes('stroke="#fff"') ||
-          rawHtml.includes('fill="#2f8d46"') || rawHtml.includes('rgb(47, 141, 70)')) {
-        return true;
-      }
-    }
-
-    // 4. Coordinate Element Sampling
-    try {
-      const rect = row.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const target = document.elementFromPoint(rect.right - 20, rect.top + rect.height / 2);
-        if (target) {
-          const container = target.closest('svg, [class*="icon"], [class*="tick"], span, div') || target;
-          const html = container.outerHTML.toLowerCase();
-          if (html.includes('group11(1)') || html.includes('stroke="white"') || html.includes('fill="#2f8d46"')) {
-            return true;
-          }
-        }
-      }
-    } catch (e) {}
-
-    // 5. Direct React Fiber Props
+    // 4. React Fiber authoritative props
     try {
       let curr = row;
       let depth = 0;
@@ -451,10 +418,16 @@
           while (fiber && fDepth < 8) {
             const p = fiber.memoizedProps;
             if (p) {
-              if (p.isCompleted === true || p.completed === true || p.is_completed === 1 || p.is_completed === true) return true;
-              if (p.status === 'completed' || p.status === 'COMPLETED' || p.status === 1) return true;
-              if (p.item && (p.item.is_completed === 1 || p.item.isCompleted === true || p.item.completed === true)) return true;
-              if (p.video && (p.video.is_completed === 1 || p.video.isCompleted === true || p.video.completed === true)) return true;
+              if (p.isCompleted === true || p.completed === true || p.is_completed === 1) return true;
+              if (p.isCompleted === false || p.completed === false || p.is_completed === 0) return false;
+              if (p.item) {
+                if (p.item.is_completed === 1 || p.item.isCompleted === true || p.item.completed === true) return true;
+                if (p.item.is_completed === 0 || p.item.isCompleted === false || p.item.completed === false) return false;
+              }
+              if (p.video) {
+                if (p.video.is_completed === 1 || p.video.isCompleted === true || p.video.completed === true) return true;
+                if (p.video.is_completed === 0 || p.video.isCompleted === false || p.video.completed === false) return false;
+              }
             }
             fiber = fiber.return;
             fDepth++;
@@ -469,7 +442,7 @@
   }
 
   // ====================================================================
-  // 10. SIDEBAR DISCOVERY & TARGETING
+  // 10. SIDEBAR ROW TARGETING
   // ====================================================================
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
@@ -568,7 +541,7 @@
 
   function replayVideoFromBeginning(video) {
     if (!video) return;
-    console.log('[GFG Auto v5.5] Resetting to 0:00...');
+    console.log('[GFG Auto v5.6] Resetting to 0:00 to satisfy watch-time...');
     try { video.currentTime = 0; } catch (e) {}
     try {
       video.dispatchEvent(new Event('seeking'));
@@ -582,53 +555,49 @@
   }
 
   // ====================================================================
-  // 11. ADVANCER & CLIENT-SIDE SPA ROUTING ENGINE
+  // 11. ADVANCER (NAVIGATES ONLY TO UNCOMPLETED TARGETS)
   // ====================================================================
   let lastAdvanceTime = 0;
 
-  function advanceToNext(forceSequential = false) {
+  function advanceToNext() {
     const now = Date.now();
     if (now - lastAdvanceTime < 2500) return;
     lastAdvanceTime = now;
 
-    updateHUDStatus('Advancing to next lesson...', '#22c55e');
-    console.log('[GFG Auto v5.5] Advancing to next lesson...');
+    console.log('[GFG Auto v5.6] Searching for next uncompleted lesson...');
 
-    const allRows = getSidebarVideoRows();
-    const currentIdx = allRows.findIndex(r => isCurrentVideoRow(r));
-
-    // 1. If currently at a valid video index and it just finished, advance to sequential next video!
-    if (currentIdx !== -1 && currentIdx + 1 < allRows.length) {
-      const nextRow = allRows[currentIdx + 1];
-      console.log('[GFG Auto v5.5] Advancing sequentially to next video row:', nextRow);
-      navigateToRow(nextRow);
-      return;
-    }
-
-    // 2. Check for any earlier uncompleted video row
+    // 1. Find first uncompleted video in the sidebar
     const uncompleted = findFirstUncompletedVideoRow();
-    if (uncompleted && !isCurrentVideoRow(uncompleted)) {
-      console.log('[GFG Auto v5.5] Jumping to uncompleted video row:', uncompleted);
-      navigateToRow(uncompleted);
-      return;
+    if (uncompleted) {
+      if (!isCurrentVideoRow(uncompleted)) {
+        console.log('[GFG Auto v5.6] Advancing to uncompleted lesson:', uncompleted);
+        updateHUDStatus('Advancing to next uncompleted lesson...', '#22c55e');
+        navigateToRow(uncompleted);
+        return;
+      } else {
+        console.log('[GFG Auto v5.6] Current lesson is still uncompleted.');
+        return;
+      }
     }
 
-    // 3. Click Top-Right Next » button if visible
+    // 2. All videos in current track have solid green ticks! Advance to Next Track
+    console.log('[GFG Auto v5.6] All videos in this track confirmed complete! Advancing to Next Track...');
+    updateHUDStatus('Track Complete! Advancing to Next Track...', '#22c55e');
+
     const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
     const topNext = allInteractive.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
       const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-      return (txt === 'next' || txt === 'next »' || txt === 'next >>' || txt === 'next >' || txt === 'next ›') && r.top < 240 && r.left > 350;
+      return (txt === 'next »' || txt === 'next >>' || txt === 'next >' || txt === 'next ›') && r.top < 240 && r.left > 350;
     });
 
     if (topNext) {
-      console.log('[GFG Auto v5.5] Advancing via Next » button:', topNext);
+      console.log('[GFG Auto v5.6] Advancing via Next » button:', topNext);
       clickOrNavigate(topNext);
       return;
     }
 
-    // 4. Click Next Track button if present
     const nextTrackBtn = allInteractive.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
@@ -637,17 +606,16 @@
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.5] Advancing to Next Track:', nextTrackBtn);
+      console.log('[GFG Auto v5.6] Advancing to Next Track:', nextTrackBtn);
       clickOrNavigate(nextTrackBtn);
       return;
     }
 
-    // 5. Bypass Quizzes / Problems to Next Track
     bypassQuizzesAndProblems();
   }
 
   function bypassQuizzesAndProblems() {
-    console.log('[GFG Auto v5.5] Bypassing non-video module...');
+    console.log('[GFG Auto v5.6] Bypassing non-video module...');
     updateHUDStatus('Bypassing Quiz / Problem...', '#eab308');
 
     const allTrackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
@@ -663,7 +631,7 @@
         continue;
       }
       if (foundCurrentTrack && !href.includes(curTrackSlug)) {
-        console.log('[GFG Auto v5.5] Advancing to next track link:', a);
+        console.log('[GFG Auto v5.6] Advancing to next track link:', a);
         clickOrNavigate(a);
         return;
       }
@@ -681,7 +649,6 @@
   function navigateToRow(row) {
     if (!row) return false;
 
-    // Scroll sidebar row into view so virtual DOM renders it
     try {
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (e) {}
@@ -703,7 +670,6 @@
     const anchor = target.tagName === 'A' ? target : target.querySelector('a');
     const dest = explicitDestUrl || anchor?.href;
 
-    // 1. Dispatch full pointer/mouse click event sequence (Next.js SPA routing intercepts this!)
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
       try {
         target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -711,7 +677,6 @@
     });
     try { target.click(); } catch (e) {}
 
-    // 2. Client-side Next.js router integration
     if (dest && window.next?.router?.push) {
       try {
         window.next.router.push(dest);
@@ -719,7 +684,6 @@
       } catch (e) {}
     }
 
-    // 3. Fallback to hard navigation ONLY after 3.5s if URL hasn't changed
     if (dest && !dest.startsWith('javascript:')) {
       setTimeout(() => {
         if (location.href !== dest) {
@@ -736,6 +700,7 @@
   let pageLoadCooldownUntil = 0;
   let checkedVideoKey = '';
   let hasCheckedInitialEndFrame = false;
+  let completionWaitStartTime = 0;
   let lastCurTime = -1;
   let lastCurTimeUpdate = Date.now();
 
@@ -750,9 +715,10 @@
       lastAdvanceTime = 0;
       checkedVideoKey = '';
       hasCheckedInitialEndFrame = false;
+      completionWaitStartTime = 0;
       lastCurTime = -1;
       lastCurTimeUpdate = Date.now();
-      console.log('[GFG Auto v5.5] URL changed:', currentUrl);
+      console.log('[GFG Auto v5.6] URL changed:', currentUrl);
       updateHUDStatus('Loading new video...', '#22c55e');
       return;
     }
@@ -774,10 +740,10 @@
       return;
     }
 
-    // 4. If current video is ALREADY COMPLETED (solid green tick), skip immediately!
+    // 4. If current video ALREADY HAS SOLID DARK GREEN TICK, skip it immediately!
     if (Date.now() > pageLoadCooldownUntil) {
       if (isCurrentVideoCompleted()) {
-        updateHUDStatus('✓ Already completed! Advancing...', '#22c55e');
+        updateHUDStatus('✓ Dark Green Tick Detected! Skipping...', '#22c55e');
         advanceToNext();
         return;
       }
@@ -833,35 +799,47 @@
       origPlay.call(video).catch(() => {});
     }
 
-    // Stall / Buffer detection watchdog: if currentTime is frozen for > 12s, kickstart buffer
-    if (!video.paused && !video.ended && video.duration > 0) {
-      if (Math.abs(video.currentTime - lastCurTime) < 0.1) {
-        if (Date.now() - lastCurTimeUpdate > 12000) {
-          console.log('[GFG Auto v5.5] Playback stalled! Kickstarting video buffer...');
-          lastCurTimeUpdate = Date.now();
-          video.currentTime += 0.2;
-          origPlay.call(video).catch(() => {});
-          if (bigPlay) { try { bigPlay.click(); } catch (e) {} }
-        }
-      } else {
-        lastCurTime = video.currentTime;
-        lastCurTimeUpdate = Date.now();
-      }
-    }
-
     // Live Playing Status
     if (video.duration > 0 && !video.paused) {
       updateHUDStatus('▶ Playing at 2.0x (Muted • 240p)', '#22c55e');
     }
 
-    // 6. Video Completion Check - advance immediately
-    const isFinished = video.ended || (video.duration > 3 && video.currentTime >= video.duration - 0.5);
-    if (isFinished) {
-      if (video.currentTime > 2 || video.ended) {
-        updateHUDStatus('✓ Video complete! Advancing...', '#22c55e');
+    // ==================================================================
+    // 6. STRICT DARK GREEN TICK VERIFICATION & COMPLETION HANDLER
+    // NEVER assumes completed just because playback finished!
+    // Waits for GFG to award the solid dark green tick!
+    // ==================================================================
+    const isAtEnd = video.ended || (video.duration > 3 && video.currentTime >= video.duration - 0.5);
+    if (isAtEnd && (video.currentTime > 2 || video.ended)) {
+      if (!completionWaitStartTime) {
+        completionWaitStartTime = Date.now();
+        console.log('[GFG Auto v5.6] Video playback completed. Waiting for GFG solid dark green tick...');
+      }
+
+      // Check if GFG has officially marked the solid dark green tick on the sidebar
+      if (isCurrentVideoCompleted()) {
+        console.log('[GFG Auto v5.6] ✓ Solid dark green tick CONFIRMED by GFG! Advancing...');
+        updateHUDStatus('✓ Dark Green Tick Confirmed! Advancing...', '#22c55e');
+        completionWaitStartTime = 0;
         advanceToNext();
         return;
       }
+
+      const waitElapsed = (Date.now() - completionWaitStartTime) / 1000;
+      updateHUDStatus(`⏳ Waiting for GFG Green Tick (${waitElapsed.toFixed(0)}s)...`, '#eab308');
+
+      // If after 8 seconds GFG still has NOT marked it complete with the green tick:
+      // Watch-time was not satisfied or dropped! Do NOT skip! Replay from 0:00!
+      if (waitElapsed > 8) {
+        console.log('[GFG Auto v5.6] GFG green tick NOT detected after 8s! Replaying from 0:00 to satisfy watch-time...');
+        updateHUDStatus('↺ No Green Tick: Replaying from 0:00...', '#eab308');
+        completionWaitStartTime = 0;
+        replayVideoFromBeginning(video);
+        return;
+      }
+      return;
+    } else {
+      completionWaitStartTime = 0;
     }
   }
 
