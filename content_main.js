@@ -1,44 +1,33 @@
 // ======================================================================
-// GFG Course Auto-Advancer - Main World Execution Script (v5.2.0)
+// GFG Course Auto-Advancer - Main World Execution Script (v5.3.0)
 // Runs directly in the webpage context (world: "MAIN")
 // Features:
-// 1. Sleek, visible, draggable Floating HUD with live status & speed controls
-// 2. Dedicated 10x speed button with strict speed lock (and 2x, 5x, 16x options)
-// 3. Instant manual skip and rewind controls
-// 4. Infallible Green Tick Detection (SVG assets, stroke/fill, React Fiber)
-// 5. Background & Virtual Desktop persistence (visibility & focus spoofing)
-// 6. Anti-pause hooks & seamless Next.js SPA auto-advancement
+// 1. Strict 2.0x Playback Lock (Accepted by GFG backend watch-time validation)
+// 2. Unpausable Background Video Engine (Chromium background-video-pause bypass)
+// 3. Dual-Layer Muting (Tab muted at browser level + zero-gain Web Audio node)
+// 4. Infallible Green Tick Detection (Official SVG assets, white stroke, React Fiber)
+// 5. Automatic Non-Blocking Navigation (SPA + direct background href fallback)
+// 6. Sleek Floating HUD with live progress & ETA (NO speed buttons)
 // ======================================================================
 
 (function () {
   'use strict';
 
-  if (window.__GFG_AUTO_MAIN_V52__) return;
-  window.__GFG_AUTO_MAIN_V52__ = true;
+  if (window.__GFG_AUTO_MAIN_V53__) return;
+  window.__GFG_AUTO_MAIN_V53__ = true;
 
-  console.log('%c[GFG Auto v5.2.0] Main World Engine Active with 10x Speed & Visible HUD!', 'color: #38bdf8; font-size: 14px; font-weight: bold;');
+  console.log('%c[GFG Auto v5.3.0] Main World Engine Active - Background Persistence Enabled', 'color: #22c55e; font-size: 14px; font-weight: bold;');
 
-  // ====================================================================
-  // 1. SPEED CONFIGURATION & PERSISTENCE
-  // ====================================================================
-  let targetSpeed = parseFloat(localStorage.getItem('gfg_auto_speed') || '10.0');
-  if (isNaN(targetSpeed) || targetSpeed <= 0) targetSpeed = 10.0;
+  const TARGET_SPEED = 2.0;
 
-  function setSpeed(newSpeed) {
-    targetSpeed = parseFloat(newSpeed);
-    localStorage.setItem('gfg_auto_speed', targetSpeed.toString());
-    const video = document.querySelector('video');
-    if (video) {
-      try {
-        video.playbackRate = targetSpeed;
-      } catch (e) {}
-    }
-    updateHUDStatus(`Speed locked at ${targetSpeed}x`, '#38bdf8');
-    renderHUD();
+  // Request browser-level tab muting from isolated extension bridge
+  function requestTabMute() {
+    window.postMessage({ source: 'gfg_main_request', action: 'MUTE_TAB' }, '*');
   }
+  requestTabMute();
 
   // ====================================================================
-  // 2. PAGE-WIDE VISIBILITY & FOCUS SPOOFER (MAIN WORLD)
+  // 1. PAGE-WIDE VISIBILITY & FOCUS SPOOFER (MAIN WORLD)
   // ====================================================================
   try {
     Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
@@ -50,40 +39,65 @@
     window.hasFocus = () => true;
   } catch (e) {}
 
-  // Intercept and drop blur, focusout, and visibilitychange in capturing phase
+  // Intercept and swallow blur, focusout, and visibilitychange events
   ['visibilitychange', 'blur', 'focusout'].forEach((evtName) => {
     window.addEventListener(evtName, (e) => e.stopImmediatePropagation(), true);
     document.addEventListener(evtName, (e) => e.stopImmediatePropagation(), true);
   });
 
   // ====================================================================
-  // 3. HTMLMEDIAELEMENT HOOKS (ENFORCE TARGET SPEED, MUTED, AND ANTI-PAUSE)
+  // 2. UNPAUSABLE BACKGROUND VIDEO ENGINE
+  // Chromium pauses muted videos in background tabs to save resources.
+  // We keep video.muted = false so Chromium treats it as an active audible video,
+  // while muting the tab at the browser level and Web Audio level for 100% silence.
   // ====================================================================
   const origPlay = HTMLMediaElement.prototype.play;
   const origPause = HTMLMediaElement.prototype.pause;
+  const connectedAudioVideos = new WeakSet();
+
+  function silenceVideoWithWebAudio(video) {
+    if (!video || connectedAudioVideos.has(video)) return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        const src = ctx.createMediaElementSource(video);
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0; // Silenced completely
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        connectedAudioVideos.add(video);
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+      }
+    } catch (e) {}
+  }
 
   HTMLMediaElement.prototype.play = function () {
-    this.muted = true;
-    this.defaultMuted = true;
-    this.volume = 0;
-    this.playbackRate = targetSpeed;
+    // Keep unmuted at DOM level so Chromium doesn't freeze the video decoder
+    this.muted = false;
+    this.defaultMuted = false;
+    this.playbackRate = TARGET_SPEED;
+    silenceVideoWithWebAudio(this);
+    requestTabMute();
     return origPlay.apply(this, arguments);
   };
 
-  // Block automated background pause calls when video is playing mid-lecture
+  // Block automated background pause calls when video is playing
   HTMLMediaElement.prototype.pause = function () {
     if (this.ended || (this.duration && this.currentTime >= this.duration - 0.5)) {
       return origPause.apply(this, arguments);
     }
-    console.log('[GFG Auto v5.2.0] Background pause suppressed.');
+    console.log('[GFG Auto v5.3.0] Background pause suppressed.');
   };
 
   // ====================================================================
-  // 4. FLOATING HUD (VISIBLE, DRAGGABLE, INTERACTIVE)
+  // 3. FLOATING HUD (VISIBLE, DRAGGABLE, NO SPEED BUTTONS)
   // ====================================================================
   let hudContainer = null;
   let isMinimized = localStorage.getItem('gfg_hud_minimized') === 'true';
-  let hudStatusMessage = 'Initializing...';
+  let hudStatusMessage = 'Active (2.0x)';
   let hudStatusColor = '#22c55e';
 
   function updateHUDStatus(msg, color = '#22c55e') {
@@ -98,17 +112,9 @@
     if (!hudContainer) {
       hudContainer = document.createElement('div');
       hudContainer.id = 'gfg-auto-hud-v5';
-      hudContainer.style.cssText = `
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        z-index: 2147483647;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        user-select: none;
-      `;
+      hudContainer.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; user-select: none;';
       document.body.appendChild(hudContainer);
 
-      // Draggable logic
       let isDragging = false;
       let startX = 0, startY = 0, origLeft = 0, origTop = 0;
 
@@ -123,16 +129,16 @@
         origTop = rect.top;
         hudContainer.style.bottom = 'auto';
         hudContainer.style.right = 'auto';
-        hudContainer.style.left = `${origLeft}px`;
-        hudContainer.style.top = `${origTop}px`;
+        hudContainer.style.left = origLeft + 'px';
+        hudContainer.style.top = origTop + 'px';
       });
 
       window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        hudContainer.style.left = `${Math.max(10, Math.min(window.innerWidth - 300, origLeft + dx))}px`;
-        hudContainer.style.top = `${Math.max(10, Math.min(window.innerHeight - 80, origTop + dy))}px`;
+        hudContainer.style.left = Math.max(10, Math.min(window.innerWidth - 280, origLeft + dx)) + 'px';
+        hudContainer.style.top = Math.max(10, Math.min(window.innerHeight - 80, origTop + dy)) + 'px';
       });
 
       window.addEventListener('mouseup', () => {
@@ -141,35 +147,7 @@
     }
 
     if (isMinimized) {
-      hudContainer.innerHTML = `
-        <div id="gfg-hud-header" style="
-          background: rgba(15, 23, 42, 0.95);
-          backdrop-filter: blur(12px);
-          border: 1.5px solid #38bdf8;
-          border-radius: 9999px;
-          padding: 8px 16px;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: move;
-          color: #f8fafc;
-          font-size: 12px;
-          font-weight: 600;
-        ">
-          <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
-          <span>⚡ ${targetSpeed}x</span>
-          <button id="gfg-hud-expand-btn" style="
-            background: none;
-            border: none;
-            color: #94a3b8;
-            cursor: pointer;
-            font-size: 14px;
-            padding: 0 2px;
-            line-height: 1;
-          " title="Expand panel">⤢</button>
-        </div>
-      `;
+      hudContainer.innerHTML = '<div id="gfg-hud-header" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1.5px solid #22c55e; border-radius: 9999px; padding: 7px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; cursor: move; color: #f8fafc; font-size: 12px; font-weight: 600;"><span style="width: 8px; height: 8px; border-radius: 50%; background: ' + hudStatusColor + '; display: inline-block;"></span><span>GFG Auto 2x</span><button id="gfg-hud-expand-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;" title="Expand panel">⤢</button></div>';
       const expandBtn = document.getElementById('gfg-hud-expand-btn');
       if (expandBtn) {
         expandBtn.onclick = (e) => {
@@ -189,130 +167,34 @@
       const curS = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
       const durM = Math.floor(video.duration / 60);
       const durS = Math.floor(video.duration % 60).toString().padStart(2, '0');
-      const remSec = Math.max(0, Math.round((video.duration - video.currentTime) / targetSpeed));
+      const remSec = Math.max(0, Math.round((video.duration - video.currentTime) / TARGET_SPEED));
       const remM = Math.floor(remSec / 60);
       const remS = (remSec % 60).toString().padStart(2, '0');
-      timeInfo = `[${curM}:${curS} / ${durM}:${durS}] • ETA: ~${remM}m ${remS}s`;
+      timeInfo = '[' + curM + ':' + curS + ' / ' + durM + ':' + durS + '] • ETA: ~' + remM + 'm ' + remS + 's';
     }
 
-    const speeds = [1, 2, 5, 10, 16];
-    const speedButtonsHtml = speeds.map(s => {
-      const isActive = targetSpeed === s;
-      const isTenX = s === 10;
-      const activeStyle = isActive
-        ? (isTenX
-            ? 'background: #0284c7; border: 1.5px solid #38bdf8; box-shadow: 0 0 12px rgba(56,189,248,0.7); font-weight: 800; color: #ffffff;'
-            : 'background: #16a34a; border: 1.5px solid #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); font-weight: 700; color: #ffffff;')
-        : 'background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.2); color: #cbd5e1; font-weight: 500;';
-
-      const label = isTenX ? '⚡ 10x' : `${s}x`;
-      return `
-        <button class="gfg-speed-btn" data-speed="${s}" style="
-          ${activeStyle}
-          padding: 4px 9px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 11px;
-          transition: all 0.15s ease;
-        ">${label}</button>
-      `;
-    }).join('');
-
     hudContainer.innerHTML = `
-      <div style="
-        background: rgba(15, 23, 42, 0.96);
-        backdrop-filter: blur(14px);
-        border: 1.5px solid #0ea5e9;
-        border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-        padding: 12px 14px;
-        min-width: 270px;
-        max-width: 320px;
-        color: #f8fafc;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      ">
-        <!-- Header -->
-        <div id="gfg-hud-header" style="
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          cursor: move;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.15);
-          padding-bottom: 6px;
-        ">
+      <div style="background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(14px); border: 1.5px solid #22c55e; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); padding: 12px 14px; min-width: 250px; max-width: 300px; color: #f8fafc; display: flex; flex-direction: column; gap: 8px;">
+        <div id="gfg-hud-header" style="display: flex; align-items: center; justify-content: space-between; cursor: move; border-bottom: 1px solid rgba(148, 163, 184, 0.15); padding-bottom: 6px;">
           <div style="display: flex; align-items: center; gap: 7px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${hudStatusColor}; display: inline-block;"></span>
-            <span style="font-weight: 800; font-size: 13px; color: #38bdf8; letter-spacing: 0.3px;">GFG Auto v5.2</span>
+            <span style="font-weight: 800; font-size: 13px; color: #22c55e; letter-spacing: 0.3px;">GFG Auto v5.3</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <button id="gfg-hud-min-btn" style="
-              background: none;
-              border: none;
-              color: #94a3b8;
-              cursor: pointer;
-              font-size: 14px;
-              padding: 0 4px;
-              line-height: 1;
-            " title="Minimize panel">_</button>
-          </div>
+          <button id="gfg-hud-min-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;" title="Minimize panel">_</button>
         </div>
 
-        <!-- Status Message & Live Time -->
         <div style="font-size: 12px; line-height: 1.4;">
           <div style="color: #f1f5f9; font-weight: 600;">${hudStatusMessage}</div>
           ${timeInfo ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">${timeInfo}</div>` : ''}
         </div>
 
-        <!-- Speed Selector Row -->
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <div style="font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Playback Speed:</div>
-          <div style="display: flex; gap: 5px;">
-            ${speedButtonsHtml}
-          </div>
-        </div>
-
-        <!-- Action Buttons Row -->
         <div style="display: flex; gap: 6px; margin-top: 2px;">
-          <button id="gfg-hud-skip-btn" style="
-            flex: 1;
-            background: #0284c7;
-            color: #ffffff;
-            border: none;
-            padding: 5px 8px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            transition: background 0.15s;
-          " title="Skip to next uncompleted lesson">⏭ Skip</button>
-
-          <button id="gfg-hud-replay-btn" style="
-            flex: 1;
-            background: rgba(51, 65, 85, 0.8);
-            color: #f8fafc;
-            border: 1px solid rgba(148, 163, 184, 0.3);
-            padding: 5px 8px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            transition: background 0.15s;
-          " title="Rewind to 0:00 and play">↺ Replay 0:00</button>
+          <button id="gfg-hud-skip-btn" style="flex: 1; background: #16a34a; color: #ffffff; border: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px; transition: background 0.15s;" title="Skip to next uncompleted lesson">⏭ Skip</button>
+          <button id="gfg-hud-replay-btn" style="flex: 1; background: rgba(51, 65, 85, 0.8); color: #f8fafc; border: 1px solid rgba(148, 163, 184, 0.3); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; transition: background 0.15s;" title="Rewind to 0:00 and play">↺ Replay 0:00</button>
         </div>
       </div>
     `;
 
-    // Bind Min/Max
     const minBtn = document.getElementById('gfg-hud-min-btn');
     if (minBtn) {
       minBtn.onclick = (e) => {
@@ -323,16 +205,6 @@
       };
     }
 
-    // Bind Speed Buttons
-    document.querySelectorAll('.gfg-speed-btn').forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const spd = parseFloat(btn.getAttribute('data-speed'));
-        if (spd) setSpeed(spd);
-      };
-    });
-
-    // Bind Skip Button
     const skipBtn = document.getElementById('gfg-hud-skip-btn');
     if (skipBtn) {
       skipBtn.onclick = (e) => {
@@ -343,7 +215,6 @@
       };
     }
 
-    // Bind Replay Button
     const replayBtn = document.getElementById('gfg-hud-replay-btn');
     if (replayBtn) {
       replayBtn.onclick = (e) => {
@@ -358,7 +229,7 @@
   }
 
   // ====================================================================
-  // 5. GREEN TICK DETECTION ENGINE (100% CERTAINTY)
+  // 4. GREEN TICK DETECTION ENGINE (100% CERTAINTY)
   // ====================================================================
   function isRowCompleted(row) {
     if (!row) return false;
@@ -424,7 +295,7 @@
       }
     } catch (e) {}
 
-    // 5. Direct React Fiber Props (100% accessible in Main World!)
+    // 5. Direct React Fiber Props (100% accessible in Main World)
     try {
       let curr = row;
       let depth = 0;
@@ -454,7 +325,7 @@
   }
 
   // ====================================================================
-  // 6. SIDEBAR NAVIGATION & PLAYLIST DISCOVERY
+  // 5. SIDEBAR NAVIGATION & PLAYLIST DISCOVERY
   // ====================================================================
   function getSidebarVideoRows() {
     const all = Array.from(document.querySelectorAll('*'));
@@ -552,7 +423,7 @@
   }
 
   // ====================================================================
-  // 7. REPLAY GLITCHED END-FRAME VIDEOS FROM 0:00
+  // 6. REPLAY GLITCHED END-FRAME VIDEOS FROM 0:00
   // ====================================================================
   function clickPlayerRestartButton() {
     const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], i, svg'));
@@ -570,7 +441,7 @@
 
   function replayVideoFromBeginning(video) {
     if (!video) return;
-    console.log('[GFG Auto v5.2.0] Glitched end-frame video detected! Resetting to 0:00...');
+    console.log('[GFG Auto v5.3.0] Glitched end-frame video detected! Resetting to 0:00...');
     try { video.currentTime = 0; } catch (e) {}
     try {
       video.dispatchEvent(new Event('seeking'));
@@ -580,14 +451,12 @@
 
     clickPlayerRestartButton();
 
-    video.muted = true;
-    video.volume = 0;
-    video.playbackRate = targetSpeed;
+    video.playbackRate = TARGET_SPEED;
     origPlay.call(video).catch(() => {});
   }
 
   // ====================================================================
-  // 8. ADVANCER & NAVIGATION (SPA + DOM)
+  // 7. ADVANCER & NAVIGATION (SPA + DIRECT HREF FALLBACK)
   // ====================================================================
   let lastAdvanceTime = 0;
 
@@ -596,8 +465,8 @@
     if (now - lastAdvanceTime < 2500) return;
     lastAdvanceTime = now;
 
-    updateHUDStatus('Advancing to next target...', '#38bdf8');
-    console.log('[GFG Auto v5.2.0] Advancing to next target...');
+    updateHUDStatus('Advancing to next target...', '#22c55e');
+    console.log('[GFG Auto v5.3.0] Advancing to next target...');
 
     const uncompleted = findFirstUncompletedVideoRow();
     const allRows = getSidebarVideoRows();
@@ -607,8 +476,8 @@
     if (uncompleted && currentIdx !== -1) {
       const uncompletedIdx = allRows.indexOf(uncompleted);
       if (uncompletedIdx < currentIdx) {
-        console.log('[GFG Auto v5.2.0] Revisiting missed uncompleted video:', uncompleted);
-        updateHUDStatus('Revisiting missed video...', '#38bdf8');
+        console.log('[GFG Auto v5.3.0] Revisiting missed uncompleted video:', uncompleted);
+        updateHUDStatus('Revisiting missed video...', '#22c55e');
         navigateToRow(uncompleted);
         return;
       }
@@ -616,8 +485,8 @@
 
     // 2. Direct jump to next uncompleted video
     if (uncompleted && !isCurrentVideoRow(uncompleted)) {
-      console.log('[GFG Auto v5.2.0] Jumping directly to uncompleted video:', uncompleted);
-      updateHUDStatus('Jumping to next uncompleted video...', '#38bdf8');
+      console.log('[GFG Auto v5.3.0] Jumping directly to uncompleted video:', uncompleted);
+      updateHUDStatus('Jumping to next video...', '#22c55e');
       navigateToRow(uncompleted);
       return;
     }
@@ -632,8 +501,8 @@
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.2.0] Advancing to Next Track button:', nextTrackBtn);
-      updateHUDStatus('Advancing to Next Track...', '#38bdf8');
+      console.log('[GFG Auto v5.3.0] Advancing to Next Track button:', nextTrackBtn);
+      updateHUDStatus('Advancing to Next Track...', '#22c55e');
       clickTarget(nextTrackBtn);
       return;
     }
@@ -649,8 +518,8 @@
 
     if (topNext) {
       const btn = topNext.closest('button, a, [role="button"]') || topNext;
-      console.log('[GFG Auto v5.2.0] Advancing via Top-Right Next button:', btn);
-      updateHUDStatus('Advancing via Next button...', '#38bdf8');
+      console.log('[GFG Auto v5.3.0] Advancing via Top-Right Next button:', btn);
+      updateHUDStatus('Advancing via Next button...', '#22c55e');
       clickTarget(btn);
       return;
     }
@@ -660,7 +529,7 @@
   }
 
   function bypassQuizzesAndProblems() {
-    console.log('[GFG Auto v5.2.0] Bypassing non-video module...');
+    console.log('[GFG Auto v5.3.0] Bypassing non-video module...');
     updateHUDStatus('Bypassing Quiz / Problem...', '#eab308');
 
     const allTrackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]'));
@@ -676,7 +545,7 @@
         continue;
       }
       if (foundCurrentTrack && !href.includes(curTrackSlug)) {
-        console.log('[GFG Auto v5.2.0] Advancing to next track link:', a);
+        console.log('[GFG Auto v5.3.0] Advancing to next track link:', a);
         clickTarget(a);
         return;
       }
@@ -694,25 +563,16 @@
   function navigateToRow(row) {
     if (!row) return false;
 
-    try {
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } catch (e) {}
-
     const a = row.tagName === 'A' ? row : row.querySelector('a');
     if (a && a.href && !a.href.startsWith('javascript:')) {
       const destUrl = a.href;
       clickTarget(a);
+      // Hard navigation fallback for background tabs where React events may defer
       setTimeout(() => {
         if (location.href !== destUrl) {
-          try {
-            if (window.next && window.next.router) {
-              window.next.router.push(destUrl);
-              return;
-            }
-          } catch (e) {}
           window.location.href = destUrl;
         }
-      }, 1500);
+      }, 1000);
       return true;
     }
 
@@ -735,10 +595,19 @@
       } catch (e) {}
     });
     try { target.click(); } catch (e) {}
+    const anchor = target.tagName === 'A' ? target : target.querySelector('a');
+    if (anchor && anchor.href && !anchor.href.startsWith('javascript:')) {
+      const dest = anchor.href;
+      setTimeout(() => {
+        if (location.href !== dest) {
+          window.location.href = dest;
+        }
+      }, 1000);
+    }
   }
 
   // ====================================================================
-  // 9. CORE AUTOMATION CONTROLLER LOOP
+  // 8. CORE AUTOMATION CONTROLLER LOOP
   // ====================================================================
   let currentUrl = location.href;
   let pageLoadCooldownUntil = 0;
@@ -755,8 +624,9 @@
       lastAdvanceTime = 0;
       checkedVideoKey = '';
       hasCheckedInitialEndFrame = false;
-      console.log('[GFG Auto v5.2.0] URL changed:', currentUrl);
-      updateHUDStatus('Loading new video...', '#38bdf8');
+      console.log('[GFG Auto v5.3.0] URL changed:', currentUrl);
+      updateHUDStatus('Loading new video...', '#22c55e');
+      requestTabMute();
       return;
     }
 
@@ -786,7 +656,7 @@
       }
     }
 
-    // 5. Video Player Management (Speed Lock, Muted, Continuous Autoplay)
+    // 5. Video Player Management (2.0x, Unpausable, Continuous Autoplay)
     const video = document.querySelector('video');
     if (!video) {
       const bodyText = (document.body?.innerText || '').toLowerCase();
@@ -798,26 +668,26 @@
       return;
     }
 
+    silenceVideoWithWebAudio(video);
+    requestTabMute();
+
     // Attach pause-prevention and rate-lock listener to video directly
     if (!video.__gfg_listeners_set__) {
       video.__gfg_listeners_set__ = true;
 
-      // Ensure target speed cannot be overridden by player
       video.addEventListener('ratechange', () => {
-        if (video.playbackRate !== targetSpeed) {
-          video.playbackRate = targetSpeed;
+        if (video.playbackRate !== TARGET_SPEED) {
+          video.playbackRate = TARGET_SPEED;
         }
       });
 
-      // Prevent player auto-pause
+      // If browser or script pauses, immediately restart playback
       video.addEventListener('pause', () => {
         if (!video.ended && video.currentTime < (video.duration - 0.5)) {
           setTimeout(() => {
-            video.muted = true;
-            video.volume = 0;
-            video.playbackRate = targetSpeed;
+            video.playbackRate = TARGET_SPEED;
             origPlay.call(video).catch(() => {});
-          }, 150);
+          }, 100);
         }
       });
     }
@@ -829,9 +699,9 @@
       hasCheckedInitialEndFrame = false;
     }
 
-    if (!hasCheckedInitialEndFrame && video.duration > 5) {
+    if (!hasCheckedInitialEndFrame && video.duration > 3) {
       if (!isCurrentVideoCompleted()) {
-        if (video.currentTime >= video.duration - 3 || video.ended) {
+        if (video.currentTime >= video.duration - 2 || video.ended) {
           hasCheckedInitialEndFrame = true;
           updateHUDStatus('↺ Glitched end-frame: Resetting to 0:00...', '#eab308');
           replayVideoFromBeginning(video);
@@ -841,55 +711,49 @@
       hasCheckedInitialEndFrame = true;
     }
 
-    // Strictly lock playback rate and muted audio
-    if (video.playbackRate !== targetSpeed) {
-      video.playbackRate = targetSpeed;
-    }
-    if (!video.muted) {
-      video.muted = true;
-    }
-    if (video.volume !== 0) {
-      video.volume = 0;
+    // Strictly enforce 2.0x playback rate
+    if (video.playbackRate !== TARGET_SPEED) {
+      video.playbackRate = TARGET_SPEED;
     }
 
-    // Autoplay if paused
+    // Autoplay if paused in background
     if (video.paused && !video.ended) {
       origPlay.call(video).catch(() => {});
     }
 
     // Live Playing Status
     if (video.duration > 0 && !video.paused) {
-      updateHUDStatus(`▶ Playing at ${targetSpeed}x (Muted)`, '#22c55e');
+      updateHUDStatus('▶ Playing at 2.0x (Muted)', '#22c55e');
     }
 
     // 6. Video Completion Check
-    const isFinished = video.ended || (video.duration > 5 && video.currentTime >= video.duration - 0.5);
-    if (isFinished && hasCheckedInitialEndFrame) {
-      updateHUDStatus('✓ Video complete! Advancing...', '#22c55e');
-      setTimeout(() => {
-        advanceToNext();
-      }, 1000);
-      return;
+    const isFinished = video.ended || (video.duration > 3 && video.currentTime >= video.duration - 0.5);
+    if (isFinished) {
+      // Must have played at least 2s or ended
+      if (video.currentTime > 2 || video.ended) {
+        updateHUDStatus('✓ Video complete! Advancing...', '#22c55e');
+        setTimeout(() => {
+          advanceToNext();
+        }, 800);
+        return;
+      }
     }
   }
 
   // ====================================================================
-  // 10. UNTHROTTLED PULSE LISTENERS
+  // 9. UNTHROTTLED PULSE LISTENERS
   // ====================================================================
-  // 1. Receive 1-second pulse from Isolated World Bridge
   window.addEventListener('message', (e) => {
     if (e.data?.source === 'gfg_isolated_pulse') {
       tick();
     }
   });
 
-  // 2. Web Worker pulse loop (unthrottled timer)
   try {
     const blob = new Blob(["setInterval(() => postMessage('tick'), 1000);"], { type: 'application/javascript' });
     const worker = new Worker(URL.createObjectURL(blob));
     worker.onmessage = () => tick();
   } catch (e) {}
 
-  // 3. Standard interval fallback
   setInterval(tick, 1000);
 })();

@@ -1,11 +1,12 @@
 ﻿{
   "manifest_version": 3,
   "name": "GFG Course Auto-Advancer",
-  "version": "5.2.0",
-  "description": "Automatically advances GeeksforGeeks course videos at up to 10x speed muted, with floating HUD, skipping completed lessons and quizzes.",
+  "version": "5.3.0",
+  "description": "Automatically advances GeeksforGeeks course videos at 2.0x speed, skipping completed lessons and quizzes, with background execution across virtual desktops.",
   "permissions": [
     "alarms",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "*://*.geeksforgeeks.org/*"

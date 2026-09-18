@@ -1,10 +1,16 @@
-﻿// GFG Course Auto-Advancer - Isolated World Bridge (v5.1.0)
-// Connects to background service worker and bridges heartbeat pulses to MAIN world
+﻿// GFG Course Auto-Advancer - Isolated World Bridge (v5.3.0)
+// Manages background tab muting and heartbeat bridging to MAIN world
 
 (function () {
   'use strict';
 
   let port = null;
+
+  function ensureMuted() {
+    try {
+      chrome.runtime.sendMessage({ action: 'MUTE_TAB' }).catch(() => {});
+    } catch (e) {}
+  }
 
   function connectKeepAlive() {
     try {
@@ -12,9 +18,7 @@
 
       port.onMessage.addListener((msg) => {
         if (msg?.action === 'PULSE') {
-          // Send acknowledgement to keep worker active
           try { port.postMessage({ action: 'ACK' }); } catch (e) {}
-          // Forward pulse to Main World
           window.postMessage({ source: 'gfg_isolated_pulse', type: 'TICK' }, '*');
         }
       });
@@ -28,9 +32,15 @@
     }
   }
 
+  ensureMuted();
   connectKeepAlive();
 
-  // Fallback alarm message receiver
+  window.addEventListener('message', (e) => {
+    if (e.data?.source === 'gfg_main_request' && e.data?.action === 'MUTE_TAB') {
+      ensureMuted();
+    }
+  });
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.action === 'PULSE') {
       window.postMessage({ source: 'gfg_isolated_pulse', type: 'TICK' }, '*');
