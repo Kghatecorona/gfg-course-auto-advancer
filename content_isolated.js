@@ -1,4 +1,4 @@
-﻿// GFG Course Auto-Advancer - Isolated World Bridge (v5.3.0)
+// GFG Course Auto-Advancer - Isolated World Bridge (v5.3.0)
 // Manages background tab muting and heartbeat bridging to MAIN world
 
 (function () {
@@ -36,8 +36,14 @@
   connectKeepAlive();
 
   window.addEventListener('message', (e) => {
-    if (e.data?.source === 'gfg_main_request' && e.data?.action === 'MUTE_TAB') {
-      ensureMuted();
+    if (e.data?.source === 'gfg_main_request') {
+      if (e.data?.action === 'MUTE_TAB') {
+        ensureMuted();
+      } else if (e.data?.action === 'RELOAD_EXTENSION') {
+        try { chrome.runtime.sendMessage({ action: 'RELOAD_EXTENSION' }).catch(() => {}); } catch (err) {}
+      } else if (e.data?.action === 'NAVIGATE' && e.data?.url) {
+        try { chrome.runtime.sendMessage({ action: 'NAVIGATE', url: e.data.url }).catch(() => {}); } catch (err) {}
+      }
     }
   });
 

@@ -21,6 +21,72 @@
   const TARGET_SPEED = 2.0;
 
   // ====================================================================
+  // 0. LOCAL ORCHESTRATOR BRIDGE (http://127.0.0.1:9999)
+  // ====================================================================
+  const BRIDGE_URL = 'http://127.0.0.1:9999';
+
+  let reportedCurriculum = false;
+  function checkAndReportCurriculum() {
+    if (reportedCurriculum) return;
+    try {
+      if (window.__NEXT_DATA__) {
+        fetch(`${BRIDGE_URL}/curriculum`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: location.href,
+            nextData: window.__NEXT_DATA__,
+            title: document.title
+          })
+        }).then(r => {
+          if (r.ok) reportedCurriculum = true;
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
+  setInterval(checkAndReportCurriculum, 1500);
+
+  function pollCommands() {
+    try {
+      fetch(`${BRIDGE_URL}/command`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.action === 'NAVIGATE' && data.url) {
+            console.log('[Bridge] Executing NAVIGATE to:', data.url);
+            window.location.href = data.url;
+          }
+        }).catch(() => {});
+    } catch (e) {}
+  }
+  setInterval(pollCommands, 2000);
+
+  function reportTrackStatus() {
+    try {
+      if (!location.href.includes('/track/')) return;
+      let counterText = '';
+      const allDivs = Array.from(document.querySelectorAll('div, p, span'));
+      for (const el of allDivs) {
+        const t = (el.innerText || '').trim();
+        if (t.includes('Videos Watched') || (t.includes('Complete') && t.includes('of'))) {
+          counterText = t;
+          break;
+        }
+      }
+      fetch(`${BRIDGE_URL}/track_status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: location.href,
+          pathname: location.pathname,
+          counterText: counterText,
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+    } catch (e) {}
+  }
+  setInterval(reportTrackStatus, 3000);
+
+  // ====================================================================
   // 1. AUDIO HARDWARE CLOCK & SILENT KEEP-ALIVE
   // ====================================================================
   let audioWakeCtx = null;
@@ -596,8 +662,33 @@
       }
     }
 
-    // 2. All videos in current track have solid green ticks! Advance to Next Track
-    console.log('[GFG Auto v5.7] All videos in this track confirmed complete! Advancing to Next Track...');
+    // 2. All videos in current track have solid green ticks!
+    console.log('[GFG Auto v5.7] All videos in this track confirmed complete!');
+
+    const curPath = decodeURIComponent(location.pathname).toLowerCase();
+    const trackMatch = curPath.match(/\/track\/([^\/?#]+)/i);
+    const curTrackSlug = trackMatch ? trackMatch[1] : '';
+
+    // If track has a quiz and we are not on it yet, open the quiz!
+    if (curTrackSlug && !curPath.includes('/quiz/') && !curTrackSlug.includes('practice')) {
+      const quizBtn = Array.from(document.querySelectorAll('a, button, div, span')).find(el => {
+        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+        const href = el.getAttribute('href') || '';
+        return (txt === 'quiz' || href.includes('/quiz/')) && el.getBoundingClientRect().width > 0;
+      });
+      if (quizBtn) {
+        console.log('[GFG Auto v5.7.1] Opening track Quiz via button:', quizBtn);
+        updateHUDStatus('All videos complete! Opening Quiz...', '#3b82f6');
+        clickOrNavigate(quizBtn, `https://www.geeksforgeeks.org/batch/data-structure-juit-solan/track/${curTrackSlug}/quiz`);
+        return;
+      }
+      const quizUrl = `https://www.geeksforgeeks.org/batch/data-structure-juit-solan/track/${curTrackSlug}/quiz`;
+      console.log(`[GFG Auto v5.7.1] Navigating to track Quiz URL: ${quizUrl}`);
+      updateHUDStatus('All videos complete! Opening Quiz...', '#3b82f6');
+      window.location.href = quizUrl;
+      return;
+    }
+
     updateHUDStatus('Track Complete! Advancing to Next Track...', '#22c55e');
 
     const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"], span[role="button"]'));
@@ -609,22 +700,58 @@
     });
 
     if (topNext) {
-      console.log('[GFG Auto v5.7] Advancing via Next » button:', topNext);
+      console.log('[GFG Auto v5.7.1] Advancing via Next » button:', topNext);
       clickOrNavigate(topNext);
       return;
     }
 
-    const nextTrackBtn = allInteractive.find(el => {
+    const candidateNodes = Array.from(document.querySelectorAll('button, a, div, span, p'));
+    const nextTrackBtn = candidateNodes.find(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return false;
+      if (el.children.length > 2) return false;
       const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
       return txt.includes('next') && txt.includes('track') && !txt.includes('prev');
     });
 
     if (nextTrackBtn) {
-      console.log('[GFG Auto v5.7] Advancing to Next Track:', nextTrackBtn);
+      console.log('[GFG Auto v5.7.1] Advancing to Next Track button:', nextTrackBtn);
       clickOrNavigate(nextTrackBtn);
       return;
+    }
+
+    const ORDERED_TRACKS = [
+      'dsa-what-why-and-how-siddhartha',
+      'analysis-of-algorithm-siddhartha',
+      'mathematics-siddhartha',
+      'recursion-siddhartha',
+      'bit-magic-siddhartha',
+      'array-fundamental-siddhartha',
+      'array-practice-siddhartha',
+      'matrix-siddhartha',
+      'strings-fundamental-siddhartha',
+      'strings-practice-siddhartha',
+      'searching-siddhartha',
+      'sorting-siddhartha',
+      'hashing-fundamental-siddhartha',
+      'sets-siddhartha',
+      'maps-siddhartha',
+      'hashing-practice-siddhartha',
+      'linkedlist-fundamental-siddhartha',
+      'linkedlist-practice-siddhartha',
+      'stack-siddhartha',
+      'tree-siddhartha',
+      'graph-siddhartha'
+    ];
+    if (curTrackSlug) {
+      const curIdx = ORDERED_TRACKS.indexOf(curTrackSlug);
+      if (curIdx !== -1 && curIdx + 1 < ORDERED_TRACKS.length) {
+        const nextSlug = ORDERED_TRACKS[curIdx + 1];
+        const nextUrl = `https://www.geeksforgeeks.org/batch/data-structure-juit-solan/track/${nextSlug}`;
+        console.log(`[GFG Auto v5.7.1] Advancing to next track slug directly: ${nextSlug}`);
+        window.location.href = nextUrl;
+        return;
+      }
     }
 
     bypassQuizzesAndProblems();
@@ -770,6 +897,53 @@
   let pageLoadCooldownUntil = 0;
   let completionWaitStartTime = 0;
 
+  let lastBatchOverviewAttempt = 0;
+  function handleBatchOverviewPage() {
+    const now = Date.now();
+    if (now - lastBatchOverviewAttempt < 2500) return;
+    lastBatchOverviewAttempt = now;
+
+    console.log('[GFG Auto v5.7.1] Inspecting course resources overview page...');
+    updateHUDStatus('Selecting next playlist...', '#22c55e');
+
+    // 1. Look for GFG's primary "Continue" button
+    const allInteractive = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
+    const continueBtn = allInteractive.find(el => {
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      const r = el.getBoundingClientRect();
+      return (txt === 'continue' || txt.includes('continue')) && r.width > 0 && r.height > 0;
+    });
+
+    if (continueBtn) {
+      console.log('[GFG Auto v5.7.1] Auto-clicking Continue button on course page:', continueBtn);
+      clickOrNavigate(continueBtn);
+      return;
+    }
+
+    // 2. Expand chapter accordions if collapsed
+    const accordions = Array.from(document.querySelectorAll('div, span, button')).filter(el => {
+      const txt = (el.innerText || el.textContent || '').toLowerCase();
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && (txt.includes('data structures algorithms') || txt.includes('chapters') || txt.includes('topics')) && el.children.length < 4;
+    });
+
+    for (const acc of accordions) {
+      try { acc.click(); } catch (e) {}
+    }
+
+    // 3. Look for any track links on overview page
+    setTimeout(() => {
+      const trackLinks = Array.from(document.querySelectorAll('a[href*="/track/"]')).filter(el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      if (trackLinks.length > 0) {
+        console.log('[GFG Auto v5.7.1] Advancing to first available track link on overview:', trackLinks[0]);
+        clickOrNavigate(trackLinks[0]);
+      }
+    }, 1000);
+  }
+
   function tick() {
     renderHUD();
     enforceLowestQuality();
@@ -784,24 +958,32 @@
       lastCurTime = -1;
       lastCurTimeUpdate = Date.now();
       stallCount = 0;
-      console.log('[GFG Auto v5.7] URL changed:', currentUrl);
+      console.log('[GFG Auto v5.7.1] URL changed:', currentUrl);
       updateHUDStatus('Loading new video...', '#22c55e');
       return;
     }
 
-    // 2. Standby if not on a course track
+    // 2. Course batch resources overview page handling
     if (!location.pathname.includes('/track/')) {
-      updateHUDStatus('Standby on course page', '#94a3b8');
+      if (location.pathname.includes('/batch/')) {
+        handleBatchOverviewPage();
+      } else {
+        updateHUDStatus('Standby on course page', '#94a3b8');
+      }
       return;
     }
 
-    // 3. Skip non-video pages (Quiz, Problem, Contest, Assignment)
-    const isNonVideoPage = location.pathname.includes('/quiz/') || 
-                           location.pathname.includes('/problem/') || 
+    // 3. Quiz standby vs Skip Problems/Contests
+    if (location.pathname.includes('/quiz/')) {
+      updateHUDStatus('Quiz Active (Standby for Solver)', '#3b82f6');
+      return;
+    }
+
+    const isNonVideoPage = location.pathname.includes('/problem/') || 
                            location.pathname.includes('/contest/') || 
                            location.pathname.includes('/assignment/');
     if (isNonVideoPage) {
-      updateHUDStatus('Skipping Quiz / Problem...', '#eab308');
+      updateHUDStatus('Skipping Problem / Contest...', '#eab308');
       bypassQuizzesAndProblems();
       return;
     }
@@ -818,9 +1000,15 @@
     // 5. Video Player Management (2.0x, Autoplay, Anti-Pause, Progression Watchdog)
     const video = document.querySelector('video');
     if (!video) {
+      if (location.pathname.includes('/quiz/')) {
+        updateHUDStatus('Quiz Active (Standby for Solver)', '#3b82f6');
+        return;
+      }
       const bodyText = (document.body?.innerText || '').toLowerCase();
-      if (bodyText.includes('go to problems') || bodyText.includes('solve problems') || bodyText.includes('start quiz')) {
+      if (bodyText.includes('go to problems') || bodyText.includes('solve problems')) {
         bypassQuizzesAndProblems();
+      } else if (bodyText.includes('start quiz')) {
+        updateHUDStatus('Quiz Ready to Start', '#3b82f6');
       } else {
         updateHUDStatus('Waiting for video player...', '#94a3b8');
       }
@@ -887,12 +1075,12 @@
     if (isAtEnd && (video.currentTime > 2 || video.ended)) {
       if (!completionWaitStartTime) {
         completionWaitStartTime = Date.now();
-        console.log('[GFG Auto v5.7] Video playback completed. Waiting for GFG solid dark green tick...');
+        console.log('[GFG Auto v5.7.1] Video playback completed. Waiting for GFG solid dark green tick...');
       }
 
       // Check if GFG has officially marked the solid dark green tick on the sidebar
       if (isCurrentVideoCompleted()) {
-        console.log('[GFG Auto v5.7] ✓ Solid dark green tick CONFIRMED by GFG! Advancing...');
+        console.log('[GFG Auto v5.7.1] ✓ Solid dark green tick CONFIRMED by GFG! Advancing...');
         updateHUDStatus('✓ Dark Green Tick Confirmed! Advancing...', '#22c55e');
         completionWaitStartTime = 0;
         advanceToNext();
@@ -902,10 +1090,10 @@
       const waitElapsed = (Date.now() - completionWaitStartTime) / 1000;
       updateHUDStatus(`⏳ Waiting for GFG Green Tick (${waitElapsed.toFixed(0)}s)...`, '#eab308');
 
-      // If after 8 seconds GFG still has NOT marked it complete with the green tick:
+      // If after 25 seconds GFG still has NOT marked it complete with the green tick:
       // Watch-time was not satisfied or dropped! Do NOT skip! Replay from 0:00!
-      if (waitElapsed > 8) {
-        console.log('[GFG Auto v5.7] GFG green tick NOT detected after 8s! Replaying from 0:00 to satisfy watch-time...');
+      if (waitElapsed > 25) {
+        console.log('[GFG Auto v5.7.1] GFG green tick NOT detected after 25s! Replaying from 0:00 to satisfy watch-time...');
         updateHUDStatus('↺ No Green Tick: Replaying from 0:00...', '#eab308');
         completionWaitStartTime = 0;
         replayVideoFromBeginning(video);

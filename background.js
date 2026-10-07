@@ -1,7 +1,7 @@
-// GFG Course Auto-Advancer - Background Service Worker (v5.7.0)
-// Prevents tab discarding, maintains active keep-alive watchdog
+// GFG Course Auto-Advancer - Background Service Worker (v5.7.1)
+// Prevents tab discarding, maintains active keep-alive watchdog, handles tab mute & extension reload
 
-console.log('[GFG Auto v5.7.0] Service Worker active');
+console.log('[GFG Auto v5.7.1] Service Worker active');
 
 function protectTab(tabId) {
   if (!tabId) return;
@@ -53,3 +53,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     });
   }
 });
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.action === 'RELOAD_EXTENSION') {
+    console.log('[GFG Auto v5.7.1] Reloading extension...');
+    chrome.runtime.reload();
+  } else if (msg?.action === 'NAVIGATE' && msg?.url) {
+    if (sender?.tab?.id) {
+      chrome.tabs.update(sender.tab.id, { url: msg.url });
+    }
+  } else if (msg?.action === 'MUTE_TAB') {
+    if (sender?.tab?.id) {
+      chrome.tabs.update(sender.tab.id, { muted: true }).catch(() => {});
+    }
+  }
+});
+
